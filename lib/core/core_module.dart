@@ -1,8 +1,8 @@
 import 'package:flutter_modular/flutter_modular.dart';
 
+import 'api/api_module.dart';
 import 'bluetooth/bluetooth_service.dart';
 import 'mqtt/mqtt_service.dart';
-import 'network/dio_client.dart';
 import 'services/permission_service.dart';
 import 'storage/cache_service.dart';
 import 'storage/secure_storage_service.dart';
@@ -11,13 +11,14 @@ import 'storage/secure_storage_service.dart';
 /// 提供全局服务：网络、存储、MQTT、蓝牙、权限等
 class CoreModule extends Module {
   @override
+  List<Module> get imports => [ApiModule()];
+
+  @override
   void binds(Injector i) {
     // 存储服务
     i.addSingleton<CacheStorageService>(CacheStorageService.new);
     i.addSingleton<SecureStorageService>(SecureStorageService.new);
 
-    // 网络服务
-    i.addSingleton<DioClient>(DioClient.new);
 
     // MQTT 服务
     i.addSingleton<MqttService>(MqttService.new);
