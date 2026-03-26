@@ -1,0 +1,13 @@
+# OpenAPI 自动生成配置（dart-dio）
+input_spec: openapi.json
+output_directory: lib/core/api/generated/client
+generator_name: dart-dio
+additional_properties:
+  pubName: remep_mobile_api
+  pubAuthor: ReMep Team
+  pubVersion: 1.0.0
+  serializationLibrary: json_serializable
+  useEnumExtension: true
+  disallowAdditionalPropertiesIfNotPresent: false
+  nullableFields: true
+  dateLibrary: core

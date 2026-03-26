@@ -1,32 +1,32 @@
 import 'package:dio/dio.dart';
 
-import '../../constants/app_constants.dart';
+import '../../api/auth/auth_token_provider.dart';
+import '../../api/auth/storage_auth_token_provider.dart';
+import '../../api/http/api_request_auth.dart';
 import '../../storage/secure_storage_service.dart';
 
 /// 认证拦截器
 class AuthInterceptor extends Interceptor {
-  final SecureStorageService _secureStorage;
+  AuthInterceptor({AuthTokenProvider? tokenProvider})
+      : _tokenProvider = tokenProvider ??
+            StorageAuthTokenProvider(
+              SecureStorageService(),
+            );
 
-  AuthInterceptor({SecureStorageService? secureStorage})
-      : _secureStorage = secureStorage ?? SecureStorageService();
+  final AuthTokenProvider _tokenProvider;
 
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) async {
-    // 排除不需要认证的接口
-    final excludedPaths = [
-      '/auth/login',
-      '/auth/register',
-      '/auth/forgot-password',
-      '/auth/reset-password',
-    ];
+    final requireAuth = options.extra[ApiRequestAuth.key] == true;
 
-    if (excludedPaths.any((path) => options.path.contains(path))) {
+    // 非鉴权接口允许匿名访问。
+    if (!requireAuth) {
       return handler.next(options);
     }
 
-    // 添加认证Token
-    final token = await _secureStorage.read(key: AppConstants.tokenKey);
-    if (token != null) {
+    // 鉴权接口才注入 Token。
+    final token = await _tokenProvider.getToken();
+    if (token != null && token.isNotEmpty) {
       options.headers['Authorization'] = 'Bearer $token';
     }
 
@@ -35,10 +35,9 @@ class AuthInterceptor extends Interceptor {
 
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) async {
-    // Token过期处理
+    // Token 过期处理
     if (err.response?.statusCode == 401) {
-      // TODO: 实现Token刷新逻辑
-      // 可以在这里调用刷新Token的接口
+      // TODO: 实现 Token 刷新逻辑
     }
 
     return handler.next(err);
