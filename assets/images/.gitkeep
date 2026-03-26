@@ -1,0 +1,11 @@
+# Assets Directory
+
+This directory contains image assets for the application.
+
+## Structure
+- `images/` - Image files (PNG, JPG, SVG, etc.)
+- `icons/` - Icon files
+- `fonts/` - Custom font files
+
+## Usage
+Add your assets here and reference them in the pubspec.yaml file.
