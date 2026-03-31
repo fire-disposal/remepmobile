@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 
-import '../../../core/widgets.dart';
+import '../../../../core/widgets.dart';
 import '../../data/models/mqtt_models.dart';
 import '../controllers/mqtt_debug_controller.dart';
 

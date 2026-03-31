@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 
-import '../../../core/widgets.dart';
+import '../../../../core/widgets.dart';
 import '../../data/models/fall_detection_models.dart';
 import '../controllers/fall_detector_controller.dart';
 
@@ -150,7 +150,7 @@ class _FallDetectorPageState extends State<FallDetectorPage> {
           ),
           if (!isConnected)
             FilledButton.icon(
-              onPressed: () => Modular.to.navigate('/mqtt-debug'),
+              onPressed: () => Modular.to.navigate('/app/mqtt-debug'),
               icon: const Icon(Icons.settings, size: 18),
               label: const Text('去连接'),
               style: FilledButton.styleFrom(

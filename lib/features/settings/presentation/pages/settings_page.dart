@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 
-import '../../../core/widgets.dart';
-import '../../../core/theme.dart';
-import '../../../l10n/strings.g.dart';
+import '../../../../core/widgets.dart';
+import '../../../../core/theme.dart';
+import '../../../../l10n/strings.g.dart';
 import '../controllers/settings_controller.dart';
 
 /// 设置页面

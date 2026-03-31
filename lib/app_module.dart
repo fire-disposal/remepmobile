@@ -1,36 +1,35 @@
 import 'package:flutter_modular/flutter_modular.dart';
 
+import 'app_sections.dart';
 import 'core/core_module.dart';
-import 'features/auth/auth_module.dart';
-import 'features/mqtt_debug/mqtt_debug_module.dart';
-import 'features/fall_detector/fall_detector_module.dart';
-import 'features/settings/settings_module.dart';
-// ⚠️ FallDetection 模块已暂时禁用 - 待 TFLite 和 Camera 权限问题解决后启用
-// import 'features/fall_detection/fall_detection_module.dart';
+import 'features/auth/presentation/pages/login_page.dart';
+import 'features/fall_detector/presentation/pages/fall_detector_page.dart';
+import 'features/mqtt_debug/presentation/pages/mqtt_debug_page.dart';
+import 'features/settings/presentation/pages/settings_page.dart';
 import 'pages/app_shell_page.dart';
+import 'pages/guards/auth_guard.dart';
+import 'pages/home/dashboard_page.dart';
+import 'pages/launch_page.dart';
 
-/// 应用主模块
 class AppModule extends Module {
   @override
   List<Module> get imports => [CoreModule()];
 
   @override
-  void binds(Injector i) {
-    // 应用级别的绑定
-  }
-
-  @override
   void routes(RouteManager r) {
-    // 主应用 Shell
-    r.child('/', child: (context) => const AppShellPage());
+    r.child('/', child: (_) => const LaunchPage());
+    r.child('/login', child: (_) => const LoginPage());
 
-    // 功能模块
-    r.module('/auth', module: AuthModule());
-    r.module('/mqtt-debug', module: MqttDebugModule());
-    r.module('/fall-detector', module: FallDetectorModule());
-    r.module('/settings', module: SettingsModule());
-    
-    // ⚠️ FallDetection 模块路由已暂时禁用
-    // r.module('/fall-detection', module: FallDetectionModule());
+    r.child(
+      '/app',
+      guards: [AuthGuard()],
+      child: (_) => const AppShellPage(),
+      children: [
+        ChildRoute(appSections[0].childPath, child: (_) => const DashboardPage()),
+        ChildRoute(appSections[1].childPath, child: (_) => const MqttDebugPage()),
+        ChildRoute(appSections[2].childPath, child: (_) => const FallDetectorPage()),
+        ChildRoute(appSections[3].childPath, child: (_) => const SettingsPage()),
+      ],
+    );
   }
 }
