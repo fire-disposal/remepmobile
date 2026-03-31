@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/storage/cache_service.dart';
 import '../../../../core/storage/secure_storage_service.dart';
-import '../../../../core/theme/theme_provider.dart';
+import '../../../../core/theme/theme_notifier.dart';
 
 /// 设置状态
 class SettingsState {

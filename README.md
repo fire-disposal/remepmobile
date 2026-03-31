@@ -1,44 +1,34 @@
 # ReMep Mobile
 
-ReMep Mobile 是一个基于 Flutter + Modular 的移动健康系统客户端。
+ReMep Mobile 当前以「统一登录 + 后台壳层 + 轻量路由」为核心，优先降低多人并行开发时的心智负担。
 
-## 新架构概览
+## 设计原则（当前版本）
 
-本仓库已按“核心能力 + 功能模块”拆分：
+- **少层次、少跳转**：不强求每个功能都有独立 `Module`。
+- **鉴权全局化**：登录和会话管理只在基础设施层处理。
+- **功能接入最短路径**：新增功能通常只需要两步：
+  1. 在 `app_sections.dart` 注册菜单项。
+  2. 在 `app_module.dart` 增加一个 `ChildRoute` 页面。
 
-- `lib/core/`：基础设施（网络、存储、MQTT、权限、主题等）
-- `lib/core/api/`：API 模块化配置（客户端配置、请求鉴权策略、自动生成产物目录）
-- `lib/features/*`：按业务边界拆分的独立功能模块
-- `lib/app_module.dart`：应用路由聚合与模块装配
+## 核心结构
 
-### 匿名访问与鉴权能力
+- `lib/core/`：基础设施与控制器统一注册（DI 集中管理）
+- `lib/app_sections.dart`：内部模块注册表（菜单 + 路由）
+- `lib/app_module.dart`：应用路由入口（登录态 + `/app/*`）
+- `lib/pages/app_shell_page.dart`：后台壳层（NavigationRail + RouterOutlet）
 
-API 请求现在支持按请求粒度声明是否需要鉴权：
+## 路由
 
-- 默认 `requireAuth = false`，即允许未登录访问“非鉴权功能”
-- 对需要登录的接口显式传入 `requireAuth: true`
-- `AuthInterceptor` 仅在 `requireAuth: true` 时注入 Bearer Token
+- `/`：启动页（恢复会话并重定向）
+- `/login`：统一登录
+- `/app/dashboard`
+- `/app/mqtt-debug`
+- `/app/fall-detector`
+- `/app/settings`
 
-## API 自动生成
+`/app/*` 全部受 `AuthGuard` 保护。
 
-仓库已提供 OpenAPI 自动生成配置：
-
-- 配置文件：`openapi_generator.yaml`
-- 生成脚本：`scripts/generate_api.sh`
-- 默认输出：`lib/core/api/generated/client`
-
-### 使用方式
-
-```bash
-./scripts/generate_api.sh
-```
-
-脚本会：
-
-1. 按 `openapi_generator.yaml` 生成 dart-dio 客户端
-2. 运行 `build_runner` 生成相关序列化依赖代码
-
-## Getting Started
+## 快速开始
 
 ```bash
 flutter pub get
