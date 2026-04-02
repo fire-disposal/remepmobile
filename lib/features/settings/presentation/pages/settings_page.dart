@@ -4,7 +4,6 @@ import 'package:flutter_modular/flutter_modular.dart';
 
 import '../../../../core/widgets.dart';
 import '../../../../core/theme.dart';
-import '../../../../l10n/strings.g.dart';
 import '../controllers/settings_controller.dart';
 
 /// 设置页面
@@ -20,7 +19,7 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(Strings.settings),
+        title: const Text('设置'),
         centerTitle: true,
       ),
       body: ListenableBuilder(
@@ -37,7 +36,7 @@ class _SettingsPageState extends State<SettingsPage> {
               // 外观设置
               _buildSectionHeader(context, '外观'),
               ActionCard(
-                title: Strings.theme,
+                title: '主题',
                 subtitle: _getThemeModeText(state.themeMode),
                 icon: Icons.palette_outlined,
                 color: const Color(0xFF7B1FA2),
@@ -45,9 +44,9 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
 
               // 语言设置
-              _buildSectionHeader(context, Strings.language),
+              _buildSectionHeader(context, '语言'),
               ActionCard(
-                title: Strings.language,
+                title: '语言',
                 subtitle: '简体中文',
                 icon: Icons.language,
                 color: const Color(0xFF1E88E5),
@@ -97,9 +96,9 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
 
               // 关于
-              _buildSectionHeader(context, Strings.about),
+              _buildSectionHeader(context, '关于'),
               ActionCard(
-                title: Strings.about,
+                title: '关于',
                 subtitle: '版本 1.0.0',
                 icon: Icons.info_outline,
                 color: const Color(0xFF607D8B),
@@ -114,9 +113,9 @@ class _SettingsPageState extends State<SettingsPage> {
                 child: OutlinedButton.icon(
                   onPressed: () => _showLogoutDialog(context, controller),
                   icon: const Icon(Icons.logout),
-                  label: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    child: Text(Strings.logout),
+                  label: const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Text('退出登录'),
                   ),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Theme.of(context).colorScheme.error,
@@ -234,11 +233,11 @@ class _SettingsPageState extends State<SettingsPage> {
   String _getThemeModeText(AppThemeMode mode) {
     switch (mode) {
       case AppThemeMode.system:
-        return Strings.systemMode;
+        return '跟随系统';
       case AppThemeMode.light:
-        return Strings.lightMode;
+        return '浅色模式';
       case AppThemeMode.dark:
-        return Strings.darkMode;
+        return '深色模式';
     }
   }
 
@@ -250,7 +249,7 @@ class _SettingsPageState extends State<SettingsPage> {
     showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(Strings.theme),
+        title: const Text('主题'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: AppThemeMode.values.map((mode) {
@@ -274,11 +273,11 @@ class _SettingsPageState extends State<SettingsPage> {
   void _showAboutDialog(BuildContext context) {
     showDialog<void>(
       context: context,
-      builder: (context) => AboutDialog(
-        applicationName: Strings.appName,
+      builder: (context) => const AboutDialog(
+        applicationName: 'ReMep 移动健康',
         applicationVersion: '1.0.0',
         applicationLegalese: '© 2024 HealthTech',
-        children: const [
+        children: [
           SizedBox(height: 16),
           Text('移动健康管理系统'),
         ],
@@ -295,7 +294,7 @@ class _SettingsPageState extends State<SettingsPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: Text(Strings.cancel),
+            child: const Text('取消'),
           ),
           FilledButton(
             onPressed: () async {
@@ -306,7 +305,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 Modular.to.navigate('/auth');
               }
             },
-            child: Text(Strings.confirm),
+            child: const Text('确认'),
           ),
         ],
       ),

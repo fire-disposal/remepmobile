@@ -25,9 +25,9 @@ class AppModule extends Module {
       guards: [AuthGuard()],
       child: (_) => const AppShellPage(),
       children: [
-        ChildRoute(appSections[0].childPath, child: (_) => const DashboardPage()),
+        ChildRoute(appSections[0].childPath, child: (_) => const FallDetectorPage()),
         ChildRoute(appSections[1].childPath, child: (_) => const MqttDebugPage()),
-        ChildRoute(appSections[2].childPath, child: (_) => const FallDetectorPage()),
+        ChildRoute(appSections[2].childPath, child: (_) => const DashboardPage()),
         ChildRoute(appSections[3].childPath, child: (_) => const SettingsPage()),
       ],
     );

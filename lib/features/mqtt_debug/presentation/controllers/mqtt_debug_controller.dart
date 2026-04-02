@@ -1,10 +1,14 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:mqtt_client/mqtt_client.dart';
 import '../../data/models/mqtt_models.dart';
 import '../../data/services/mqtt_debug_service.dart';
 import '../../../../core/mqtt/mqtt_service.dart';
+import '../../../../core/storage/cache_service.dart';
+
+const _mqttConfigCacheKey = 'mqtt_connection_config';
 
 /// MQTT调试状态
 class MqttDebugState {
@@ -38,6 +42,7 @@ class MqttDebugState {
 /// MQTT调试控制器
 class MqttDebugController extends ChangeNotifier {
   final MqttDebugService _mqttDebugService;
+  final CacheStorageService _cacheStorage;
 
   MqttDebugState _state = const MqttDebugState();
   MqttDebugState get state => _state;
@@ -45,7 +50,7 @@ class MqttDebugController extends ChangeNotifier {
   StreamSubscription<MqttConnectionStatus>? _statusSubscription;
   StreamSubscription<List<MqttReceivedMessage<MqttMessage>>>? _messageSubscription;
 
-  MqttDebugController(this._mqttDebugService) {
+  MqttDebugController(this._mqttDebugService, this._cacheStorage) {
     _init();
   }
 
@@ -57,6 +62,35 @@ class MqttDebugController extends ChangeNotifier {
       );
       notifyListeners();
     });
+
+    _loadSavedConfig();
+  }
+
+  /// 加载缓存的配置
+  Future<void> _loadSavedConfig() async {
+    try {
+      final raw = _cacheStorage.read<String>(_mqttConfigCacheKey);
+      if (raw != null) {
+        final json = jsonDecode(raw) as Map<String, dynamic>;
+        final config = MqttConnectionConfig.fromJson(json);
+        _state = _state.copyWith(config: config);
+        notifyListeners();
+      }
+    } catch (e) {
+      // 忽略加载错误
+    }
+  }
+
+  /// 获取当前缓存的配置（供页面初始化使用）
+  MqttConnectionConfig? get cachedConfig => state.config ?? _mqttDebugService.currentConfig;
+
+  /// 保存配置到缓存
+  Future<void> _saveConfig(MqttConnectionConfig config) async {
+    try {
+      await _cacheStorage.write(_mqttConfigCacheKey, jsonEncode(config.toJson()));
+    } catch (e) {
+      // 忽略保存错误
+    }
   }
 
   /// 连接到MQTT服务器
@@ -65,7 +99,14 @@ class MqttDebugController extends ChangeNotifier {
       _state = _state.copyWith(config: config, error: null);
       notifyListeners();
 
-      await _mqttDebugService.connect(config);
+      await _saveConfig(config);
+
+      final success = await _mqttDebugService.connect(config);
+      if (!success) {
+        _state = _state.copyWith(error: '连接失败');
+        notifyListeners();
+        return false;
+      }
 
       // 订阅消息
       _messageSubscription = _mqttDebugService.messages?.listen((messages) {

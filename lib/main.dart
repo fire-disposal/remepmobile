@@ -2,14 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 
 import 'app_module.dart';
+import 'core/storage/cache_service.dart';
 import 'core/theme/app_theme.dart';
-import 'l10n/strings.g.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 初始化国际化
-  Strings.init(AppLocale.zhCn);
+  // 初始化 Hive 缓存
+  await CacheStorageService().init();
 
   runApp(
     ModularApp(
@@ -26,7 +26,7 @@ class AppWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
-      title: Strings.appName,
+      title: 'ReMep 移动健康',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,

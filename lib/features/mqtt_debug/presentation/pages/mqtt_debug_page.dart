@@ -36,10 +36,43 @@ class _MqttDebugPageState extends State<MqttDebugPage>
   int _messageQos = 1;
   bool _retainMessage = false;
 
+  // 高级连接配置
+  int _keepAlive = 60;
+  bool _autoReconnect = true;
+  bool _cleanSession = true;
+  int _connectionTimeout = 10;
+  final _willTopicController = TextEditingController();
+  final _willMessageController = TextEditingController();
+  int _willQos = 0;
+  bool _willRetain = false;
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _loadConfigFromController();
+  }
+
+  void _loadConfigFromController() {
+    final controller = Modular.get<MqttDebugController>();
+    final config = controller.cachedConfig;
+    if (config != null) {
+      _brokerController.text = config.broker;
+      _portController.text = config.port.toString();
+      _usernameController.text = config.username ?? '';
+      _passwordController.text = config.password ?? '';
+      _clientIdController.text = config.clientId;
+      _selectedQos = config.qos;
+      _useWebSocket = config.useWebSocket;
+      _keepAlive = config.keepAlive;
+      _autoReconnect = config.autoReconnect;
+      _cleanSession = config.cleanSession;
+      _connectionTimeout = config.connectionTimeout;
+      _willTopicController.text = config.willTopic ?? '';
+      _willMessageController.text = config.willMessage ?? '';
+      _willQos = config.willQos;
+      _willRetain = config.willRetain;
+    }
   }
 
   @override
@@ -52,6 +85,8 @@ class _MqttDebugPageState extends State<MqttDebugPage>
     _clientIdController.dispose();
     _topicController.dispose();
     _payloadController.dispose();
+    _willTopicController.dispose();
+    _willMessageController.dispose();
     super.dispose();
   }
 
@@ -219,6 +254,164 @@ class _MqttDebugPageState extends State<MqttDebugPage>
                 onChanged: mqttState.isConnected
                     ? null
                     : (value) => setState(() => _useWebSocket = value),
+              ),
+              const SizedBox(height: 16),
+
+              // KeepAlive 和连接超时
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: TextEditingController(text: _keepAlive.toString()),
+                      decoration: const InputDecoration(
+                        labelText: '保活间隔 (秒)',
+                        prefixIcon: Icon(Icons.timer),
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.number,
+                      enabled: !mqttState.isConnected,
+                      onChanged: (value) {
+                        _keepAlive = int.tryParse(value) ?? 60;
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: TextField(
+                      controller: TextEditingController(text: _connectionTimeout.toString()),
+                      decoration: const InputDecoration(
+                        labelText: '超时 (秒)',
+                        prefixIcon: Icon(Icons.timelapse),
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.number,
+                      enabled: !mqttState.isConnected,
+                      onChanged: (value) {
+                        _connectionTimeout = int.tryParse(value) ?? 10;
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // 连接行为选项
+              Row(
+                children: [
+                  Expanded(
+                    child: SwitchListTile(
+                      title: const Text('自动重连'),
+                      value: _autoReconnect,
+                      onChanged: mqttState.isConnected
+                          ? null
+                          : (value) => setState(() => _autoReconnect = value),
+                    ),
+                  ),
+                  Expanded(
+                    child: SwitchListTile(
+                      title: const Text('清除会话'),
+                      value: _cleanSession,
+                      onChanged: mqttState.isConnected
+                          ? null
+                          : (value) => setState(() => _cleanSession = value),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // 遗嘱消息 (高级)
+              ExpansionTile(
+                title: const Text('遗嘱消息 (高级)'),
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Column(
+                      children: [
+                        TextField(
+                          controller: _willTopicController,
+                          decoration: const InputDecoration(
+                            labelText: '遗嘱主题',
+                            prefixIcon: Icon(Icons.topic),
+                            border: OutlineInputBorder(),
+                          ),
+                          enabled: !mqttState.isConnected,
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _willMessageController,
+                          decoration: const InputDecoration(
+                            labelText: '遗嘱消息',
+                            prefixIcon: Icon(Icons.message),
+                            border: OutlineInputBorder(),
+                          ),
+                          enabled: !mqttState.isConnected,
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('遗嘱QoS', style: Theme.of(context).textTheme.bodySmall),
+                                    DropdownButton<int>(
+                                      value: _willQos,
+                                      isExpanded: true,
+                                      underline: const SizedBox(),
+                                      items: const [
+                                        DropdownMenuItem(value: 0, child: Text('0')),
+                                        DropdownMenuItem(value: 1, child: Text('1')),
+                                        DropdownMenuItem(value: 2, child: Text('2')),
+                                      ],
+                                      onChanged: mqttState.isConnected
+                                          ? null
+                                          : (value) {
+                                              if (value != null) {
+                                                setState(() => _willQos = value);
+                                              }
+                                            },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Checkbox(
+                                      value: _willRetain,
+                                      onChanged: mqttState.isConnected
+                                          ? null
+                                          : (value) {
+                                              setState(() => _willRetain = value ?? false);
+                                            },
+                                    ),
+                                    const Text('保留遗嘱'),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 24),
 
@@ -786,6 +979,14 @@ class _MqttDebugPageState extends State<MqttDebugPage>
         clientId: _clientIdController.text,
         qos: _selectedQos,
         useWebSocket: _useWebSocket,
+        keepAlive: _keepAlive,
+        autoReconnect: _autoReconnect,
+        cleanSession: _cleanSession,
+        connectionTimeout: _connectionTimeout,
+        willTopic: _willTopicController.text.isEmpty ? null : _willTopicController.text,
+        willMessage: _willMessageController.text.isEmpty ? null : _willMessageController.text,
+        willQos: _willQos,
+        willRetain: _willRetain,
       );
 
       final success = await controller.connect(config);

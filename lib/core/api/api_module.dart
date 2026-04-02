@@ -11,7 +11,7 @@ class ApiModule extends Module {
 
     // 统一 Dio 入口，生成 API 客户端时复用该实例。
     i.addSingleton<DioClient>(
-      (i) => DioClient(config: i.get<ApiClientConfig>()),
+      (Injector i) => DioClient(config: i.get<ApiClientConfig>()),
     );
   }
 }

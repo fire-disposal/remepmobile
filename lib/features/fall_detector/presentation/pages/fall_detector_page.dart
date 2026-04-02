@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 
 import '../../../../core/widgets.dart';
+import '../../../../features/mqtt_debug/presentation/controllers/mqtt_debug_controller.dart';
 import '../../data/models/fall_detection_models.dart';
 import '../controllers/fall_detector_controller.dart';
 
@@ -97,6 +98,14 @@ class _FallDetectorPageState extends State<FallDetectorPage> {
 
   Widget _buildConnectionStatusCard(BuildContext context, FallDetectorState state) {
     final isConnected = state.isConnected;
+    final mqttConfig = Modular.get<MqttDebugController>().cachedConfig;
+    final subtitle = isConnected
+        ? (mqttConfig != null
+            ? '${mqttConfig.broker}:${mqttConfig.port}'
+            : '可以发送模拟事件')
+        : (mqttConfig != null && mqttConfig.broker.isNotEmpty
+            ? '未连接至 ${mqttConfig.broker}:${mqttConfig.port}'
+            : '请先配置并连接MQTT服务器');
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -139,7 +148,7 @@ class _FallDetectorPageState extends State<FallDetectorPage> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  isConnected ? '可以发送模拟事件' : '请先连接MQTT服务器',
+                  subtitle,
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.8),
                     fontSize: 14,

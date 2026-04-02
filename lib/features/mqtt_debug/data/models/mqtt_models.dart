@@ -1,5 +1,3 @@
-// removed unused import
-
 /// MQTT连接配置
 class MqttConnectionConfig {
   final String broker;
@@ -9,6 +7,14 @@ class MqttConnectionConfig {
   final String clientId;
   final int qos;
   final bool useWebSocket;
+  final int keepAlive;
+  final bool autoReconnect;
+  final bool cleanSession;
+  final int connectionTimeout;
+  final String? willTopic;
+  final String? willMessage;
+  final int willQos;
+  final bool willRetain;
 
   const MqttConnectionConfig({
     required this.broker,
@@ -18,6 +24,14 @@ class MqttConnectionConfig {
     required this.clientId,
     this.qos = 1,
     this.useWebSocket = false,
+    this.keepAlive = 60,
+    this.autoReconnect = true,
+    this.cleanSession = true,
+    this.connectionTimeout = 10,
+    this.willTopic,
+    this.willMessage,
+    this.willQos = 0,
+    this.willRetain = false,
   });
 
   MqttConnectionConfig copyWith({
@@ -28,6 +42,14 @@ class MqttConnectionConfig {
     String? clientId,
     int? qos,
     bool? useWebSocket,
+    int? keepAlive,
+    bool? autoReconnect,
+    bool? cleanSession,
+    int? connectionTimeout,
+    String? willTopic,
+    String? willMessage,
+    int? willQos,
+    bool? willRetain,
   }) {
     return MqttConnectionConfig(
       broker: broker ?? this.broker,
@@ -37,6 +59,14 @@ class MqttConnectionConfig {
       clientId: clientId ?? this.clientId,
       qos: qos ?? this.qos,
       useWebSocket: useWebSocket ?? this.useWebSocket,
+      keepAlive: keepAlive ?? this.keepAlive,
+      autoReconnect: autoReconnect ?? this.autoReconnect,
+      cleanSession: cleanSession ?? this.cleanSession,
+      connectionTimeout: connectionTimeout ?? this.connectionTimeout,
+      willTopic: willTopic ?? this.willTopic,
+      willMessage: willMessage ?? this.willMessage,
+      willQos: willQos ?? this.willQos,
+      willRetain: willRetain ?? this.willRetain,
     );
   }
 
@@ -48,6 +78,14 @@ class MqttConnectionConfig {
         'clientId': clientId,
         'qos': qos,
         'useWebSocket': useWebSocket,
+        'keepAlive': keepAlive,
+        'autoReconnect': autoReconnect,
+        'cleanSession': cleanSession,
+        'connectionTimeout': connectionTimeout,
+        'willTopic': willTopic,
+        'willMessage': willMessage,
+        'willQos': willQos,
+        'willRetain': willRetain,
       };
 
   factory MqttConnectionConfig.fromJson(Map<String, dynamic> json) {
@@ -59,6 +97,14 @@ class MqttConnectionConfig {
       clientId: json['clientId'] as String,
       qos: json['qos'] as int? ?? 1,
       useWebSocket: json['useWebSocket'] as bool? ?? false,
+      keepAlive: json['keepAlive'] as int? ?? 60,
+      autoReconnect: json['autoReconnect'] as bool? ?? true,
+      cleanSession: json['cleanSession'] as bool? ?? true,
+      connectionTimeout: json['connectionTimeout'] as int? ?? 10,
+      willTopic: json['willTopic'] as String?,
+      willMessage: json['willMessage'] as String?,
+      willQos: json['willQos'] as int? ?? 0,
+      willRetain: json['willRetain'] as bool? ?? false,
     );
   }
 }

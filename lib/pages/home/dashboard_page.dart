@@ -6,10 +6,10 @@ class DashboardPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = [
-      _KpiItem('在线设备', '24', Icons.sensors),
-      _KpiItem('今日告警', '3', Icons.warning_amber_rounded),
-      _KpiItem('活跃用户', '12', Icons.people_alt_outlined),
-      _KpiItem('消息吞吐', '1.2k/min', Icons.insights_outlined),
+      const _KpiItem('在线设备', '24', Icons.sensors),
+      const _KpiItem('今日告警', '3', Icons.warning_amber_rounded),
+      const _KpiItem('活跃用户', '12', Icons.people_alt_outlined),
+      const _KpiItem('消息吞吐', '1.2k/min', Icons.insights_outlined),
     ];
 
     return ListView(

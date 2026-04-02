@@ -19,15 +19,13 @@ class MqttDebugService {
   /// 当前连接状态
   MqttConnectionStatus get currentStatus => _mqttService.currentStatus;
 
+  /// 当前全局配置
+  MqttConnectionConfig? get currentConfig => _mqttService.currentConfig;
+
   /// 连接到MQTT服务器
   Future<bool> connect(MqttConnectionConfig config) async {
     try {
-      await _mqttService.connect(
-        clientId: config.clientId,
-        username: config.username,
-        password: config.password,
-        useWebSocket: config.useWebSocket,
-      );
+      await _mqttService.connect(config);
 
       // 订阅消息
       _messageSubscription = _mqttService.messages?.listen((messages) {
