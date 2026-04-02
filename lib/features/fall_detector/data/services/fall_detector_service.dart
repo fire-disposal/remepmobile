@@ -1,3 +1,5 @@
+import 'package:mqtt_client/mqtt_client.dart';
+
 import '../../../../core/mqtt/mqtt_service.dart';
 import '../models/fall_detection_models.dart';
 
@@ -13,8 +15,9 @@ class FallDetectorService {
 
     try {
       _mqttService.publish(
-        topic: 'remipedia/${payload.serialNumber}/event',
+        topic: 'remipedia/devices/${payload.serialNumber}/fall_detector',
         message: payload.toJsonString(),
+        qos: MqttQos.atLeastOnce,
       );
       return true;
     } catch (_) {

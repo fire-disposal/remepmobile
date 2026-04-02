@@ -82,16 +82,19 @@ class FallEventPayload {
   final FallInferenceResult inference;
 
   Map<String, dynamic> toJson() => {
-        'serial_number': serialNumber,
-        'event_type': eventType.value,
-        'event_label': eventType.label,
         'timestamp': inference.timestamp.toUtc().toIso8601String(),
-        'model': inference.modelName,
-        'confidence': inference.box.confidence,
-        'bbox': inference.box.toJson(),
-        'ratio_delta': inference.ratioDelta,
-        'fall_suspected': inference.isFallSuspected,
-        'fall_confirmed': inference.isFallConfirmed,
+        'serial_number': serialNumber,
+        'device_type': 'fall_detector',
+        'data': {
+          'event_type': eventType.value,
+          'event_label': eventType.label,
+          'model': inference.modelName,
+          'confidence': inference.box.confidence,
+          'bbox': inference.box.toJson(),
+          'ratio_delta': inference.ratioDelta,
+          'fall_suspected': inference.isFallSuspected,
+          'fall_confirmed': inference.isFallConfirmed,
+        },
       };
 
   String toJsonString() => const JsonEncoder.withIndent('  ').convert(toJson());

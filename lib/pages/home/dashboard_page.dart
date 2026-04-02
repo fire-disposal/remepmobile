@@ -6,18 +6,23 @@ class DashboardPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = [
-      const _KpiItem('在线设备', '24', Icons.sensors),
-      const _KpiItem('今日告警', '3', Icons.warning_amber_rounded),
-      const _KpiItem('活跃用户', '12', Icons.people_alt_outlined),
-      const _KpiItem('消息吞吐', '1.2k/min', Icons.insights_outlined),
+      const _KpiItem('跌倒检测节点', '主功能', Icons.elderly_outlined),
+      const _KpiItem('MQTT模拟发送', 'QoS 1', Icons.send_outlined),
+      const _KpiItem('遥控器模拟', 'remote_controller', Icons.gamepad_outlined),
+      const _KpiItem('协议', 'remipedia/devices/{sn}/{type}', Icons.route_outlined),
     ];
 
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
         Text(
-          '控制台',
+          '模拟控制台',
           style: Theme.of(context).textTheme.headlineMedium,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          '聚焦跌倒检测与 MQTT 数据构建/发送，支持自定义 Broker 域名和端口，默认无鉴权。',
+          style: Theme.of(context).textTheme.bodyMedium,
         ),
         const SizedBox(height: 20),
         Wrap(

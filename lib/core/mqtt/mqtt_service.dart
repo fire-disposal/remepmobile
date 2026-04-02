@@ -40,15 +40,13 @@ class MqttService {
     try {
       _updateStatus(MqttConnectionStatus.connecting);
 
-      final protocol = config.useWebSocket ? 'wss://' : 'mqtt://';
-      final serverUri = '$protocol${config.broker}';
-
-      _client = MqttServerClient(serverUri, config.clientId);
+      _client = MqttServerClient(config.broker, config.clientId);
       _client!.port = config.port;
       _client!.keepAlivePeriod = config.keepAlive;
       _client!.autoReconnect = config.autoReconnect;
       _client!.useWebSocket = config.useWebSocket;
-      _client!.secure = config.useWebSocket;
+      _client!.secure = false;
+      _client!.logging(on: false);
       _client!.setProtocolV311();
 
       // 连接消息配置

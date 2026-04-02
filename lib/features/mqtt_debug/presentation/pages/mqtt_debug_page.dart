@@ -21,12 +21,13 @@ class _MqttDebugPageState extends State<MqttDebugPage>
   late TabController _tabController;
 
   // 连接配置
-  final _brokerController = TextEditingController(text: 'iomt.205716.xyz');
+  final _brokerController = TextEditingController(text: 'localhost');
   final _portController = TextEditingController(text: '1883');
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _clientIdController =
-      TextEditingController(text: 'debug_${DateTime.now().millisecondsSinceEpoch}');
+  final _clientIdController = TextEditingController(
+    text: 'remepmobile-simulator-${DateTime.now().millisecondsSinceEpoch}',
+  );
   int _selectedQos = 1;
   bool _useWebSocket = false;
 
@@ -146,7 +147,7 @@ class _MqttDebugPageState extends State<MqttDebugPage>
                 controller: _brokerController,
                 decoration: const InputDecoration(
                   labelText: 'Broker地址',
-                  hintText: '例如: iomt.205716.xyz',
+                  hintText: '例如: localhost 或 broker.example.com',
                   prefixIcon: Icon(Icons.dns),
                   border: OutlineInputBorder(),
                 ),
@@ -194,6 +195,18 @@ class _MqttDebugPageState extends State<MqttDebugPage>
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Text(
+                  '当前环境默认无鉴权，用户名/密码可留空；域名与端口可按部署环境自定义。',
+                ),
               ),
               const SizedBox(height: 16),
 
@@ -501,18 +514,18 @@ class _MqttDebugPageState extends State<MqttDebugPage>
                 children: [
                   _buildQuickTopicChip(
                     context,
-                    'remipedia/{sn}/event',
-                    '跌倒事件',
+                    'remipedia/devices/SN-001/fall_detector',
+                    '跌倒检测',
                   ),
                   _buildQuickTopicChip(
                     context,
-                    'remipedia/{sn}/data',
-                    '设备数据',
+                    'remipedia/devices/SN-001/heart_rate_monitor',
+                    '心率模拟',
                   ),
                   _buildQuickTopicChip(
                     context,
-                    'test/message',
-                    '测试消息',
+                    'remipedia/devices/SN-001/remote_controller',
+                    '遥控器模拟',
                   ),
                 ],
               ),
@@ -523,7 +536,7 @@ class _MqttDebugPageState extends State<MqttDebugPage>
                 controller: _topicController,
                 decoration: const InputDecoration(
                   labelText: '主题',
-                  hintText: '例如: remipedia/DEVICE_001/event',
+                  hintText: '例如: remipedia/devices/SN-001/fall_detector',
                   prefixIcon: Icon(Icons.topic),
                   border: OutlineInputBorder(),
                 ),
@@ -621,6 +634,11 @@ class _MqttDebugPageState extends State<MqttDebugPage>
                             icon: const Icon(Icons.format_align_left, size: 18),
                             label: const Text('格式化'),
                             onPressed: _formatJson,
+                          ),
+                          TextButton.icon(
+                            icon: const Icon(Icons.auto_fix_high, size: 18),
+                            label: const Text('协议模板'),
+                            onPressed: _fillProtocolPayload,
                           ),
                           TextButton.icon(
                             icon: const Icon(Icons.clear, size: 18),
@@ -961,6 +979,26 @@ class _MqttDebugPageState extends State<MqttDebugPage>
     } catch (e) {
       Toast.error(context, 'JSON格式错误');
     }
+  }
+
+  void _fillProtocolPayload() {
+    final topic = _topicController.text.trim();
+    final now = DateTime.now().toUtc().toIso8601String();
+
+    final deviceType = topic.isEmpty ? 'fall_detector' : topic.split('/').last;
+    final payload = <String, dynamic>{
+      'timestamp': now,
+      'device_type': deviceType,
+      if (deviceType == 'remote_controller')
+        'value': 'sos'
+      else
+        'data': {
+          'status': deviceType == 'fall_detector' ? 'fall_alert' : 'ok',
+          'value': deviceType == 'heart_rate_monitor' ? 72 : 1,
+        },
+    };
+
+    _payloadController.text = const JsonEncoder.withIndent('  ').convert(payload);
   }
 
   Future<void> _toggleConnection(
