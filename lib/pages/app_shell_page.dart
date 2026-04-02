@@ -1,33 +1,35 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_modular/flutter_modular.dart';
+import 'package:go_router/go_router.dart';
 
 import '../app_sections.dart';
 
 class AppShellPage extends StatefulWidget {
-  const AppShellPage({super.key});
+  const AppShellPage({super.key, required this.child});
+
+  final Widget child;
 
   @override
   State<AppShellPage> createState() => _AppShellPageState();
 }
 
 class _AppShellPageState extends State<AppShellPage> {
-  int get _selectedIndex {
-    final currentPath = Modular.to.path;
-    final index = appSections.indexWhere((item) => currentPath.startsWith(item.fullRoute));
-    return index >= 0 ? index : 0;
-  }
-
   @override
   Widget build(BuildContext context) {
-    final selectedIndex = _selectedIndex;
+    final currentPath = GoRouterState.of(context).uri.path;
+    final selectedIndex = appSections.indexWhere(
+      (item) => currentPath.startsWith(item.fullRoute),
+    );
+    final safeIndex = selectedIndex >= 0 ? selectedIndex : 0;
 
     return Scaffold(
       body: Row(
         children: [
           NavigationRail(
-            selectedIndex: selectedIndex,
+            selectedIndex: safeIndex,
             labelType: NavigationRailLabelType.all,
-            onDestinationSelected: (index) => Modular.to.navigate(appSections[index].fullRoute),
+            onDestinationSelected: (index) {
+              context.go(appSections[index].fullRoute);
+            },
             leading: Padding(
               padding: const EdgeInsets.only(top: 16),
               child: Icon(
@@ -49,16 +51,16 @@ class _AppShellPageState extends State<AppShellPage> {
           Expanded(
             child: Scaffold(
               appBar: AppBar(
-                title: Text(appSections[selectedIndex].label),
+                title: Text(appSections[safeIndex].label),
                 actions: [
                   IconButton(
                     tooltip: '设置',
-                    onPressed: () => Modular.to.navigate('/app/settings'),
+                    onPressed: () => context.go('/app/settings'),
                     icon: const Icon(Icons.settings_outlined),
                   ),
                 ],
               ),
-              body: const RouterOutlet(),
+              body: widget.child,
             ),
           ),
         ],

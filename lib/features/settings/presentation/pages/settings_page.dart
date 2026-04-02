@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:flutter_modular/flutter_modular.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../../core/di/service_locator.dart';
 import '../../../../core/widgets.dart';
 import '../../../../core/theme.dart';
 import '../controllers/settings_controller.dart';
@@ -23,9 +24,9 @@ class _SettingsPageState extends State<SettingsPage> {
         centerTitle: true,
       ),
       body: ListenableBuilder(
-        listenable: Modular.get<SettingsController>(),
+        listenable: getIt<SettingsController>(),
         builder: (context, _) {
-          final controller = Modular.get<SettingsController>();
+          final controller = getIt<SettingsController>();
           final state = controller.state;
 
           return ListView(
@@ -302,7 +303,7 @@ class _SettingsPageState extends State<SettingsPage> {
               await controller.logout();
               if (context.mounted) {
                 Toast.success(context, '已退出登录');
-                Modular.to.navigate('/auth');
+                context.go('/login');
               }
             },
             child: const Text('确认'),

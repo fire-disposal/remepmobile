@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_modular/flutter_modular.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/auth/session_service.dart';
+import '../../../../core/di/service_locator.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -98,7 +99,7 @@ class _LoginPageState extends State<LoginPage> {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _loading = true);
-    final session = Modular.get<SessionService>();
+    final session = getIt<SessionService>();
     await session.login(
       email: _emailController.text.trim(),
       password: _passwordController.text,
@@ -106,6 +107,6 @@ class _LoginPageState extends State<LoginPage> {
 
     if (!mounted) return;
     setState(() => _loading = false);
-    Modular.to.navigate('/app/dashboard');
+    context.go('/app/dashboard');
   }
 }

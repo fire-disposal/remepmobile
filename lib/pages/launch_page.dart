@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_modular/flutter_modular.dart';
+import 'package:go_router/go_router.dart';
 
 class LaunchPage extends StatefulWidget {
   const LaunchPage({super.key});
@@ -18,7 +18,7 @@ class _LaunchPageState extends State<LaunchPage> {
   Future<void> _boot() async {
     if (!mounted) return;
     // 直接进入主应用，不再检查登录状态
-    Modular.to.navigate('/app/fall-detector');
+    context.go('/app/fall-detector');
   }
 
   @override

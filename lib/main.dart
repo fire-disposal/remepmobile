@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_modular/flutter_modular.dart';
 
-import 'app_module.dart';
+import 'core/di/service_locator.dart';
+import 'core/navigation/app_router.dart';
 import 'core/storage/cache_service.dart';
 import 'core/theme/app_theme.dart';
 
@@ -11,12 +11,10 @@ void main() async {
   // 初始化 Hive 缓存
   await CacheStorageService().init();
 
-  runApp(
-    ModularApp(
-      module: AppModule(),
-      child: const AppWidget(),
-    ),
-  );
+  // 初始化依赖注入
+  setupServiceLocator();
+
+  runApp(const AppWidget());
 }
 
 /// 应用主 Widget
@@ -31,7 +29,7 @@ class AppWidget extends StatelessWidget {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.system,
-      routerConfig: Modular.routerConfig,
+      routerConfig: appRouter,
     );
   }
 }

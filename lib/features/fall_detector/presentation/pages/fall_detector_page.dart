@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:flutter_modular/flutter_modular.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../../core/di/service_locator.dart';
 import '../../../../core/widgets.dart';
 import '../../../../features/mqtt_debug/presentation/controllers/mqtt_debug_controller.dart';
 import '../../data/models/fall_detection_models.dart';
@@ -39,9 +40,9 @@ class _FallDetectorPageState extends State<FallDetectorPage> {
         centerTitle: true,
       ),
       body: ListenableBuilder(
-        listenable: Modular.get<FallDetectorController>(),
+        listenable: getIt<FallDetectorController>(),
         builder: (context, _) {
-          final controller = Modular.get<FallDetectorController>();
+          final controller = getIt<FallDetectorController>();
           final state = controller.state;
 
           return SingleChildScrollView(
@@ -98,7 +99,7 @@ class _FallDetectorPageState extends State<FallDetectorPage> {
 
   Widget _buildConnectionStatusCard(BuildContext context, FallDetectorState state) {
     final isConnected = state.isConnected;
-    final mqttConfig = Modular.get<MqttDebugController>().cachedConfig;
+    final mqttConfig = getIt<MqttDebugController>().cachedConfig;
     final subtitle = isConnected
         ? (mqttConfig != null
             ? '${mqttConfig.broker}:${mqttConfig.port}'
@@ -159,7 +160,7 @@ class _FallDetectorPageState extends State<FallDetectorPage> {
           ),
           if (!isConnected)
             FilledButton.icon(
-              onPressed: () => Modular.to.navigate('/app/mqtt-debug'),
+              onPressed: () => context.go('/app/mqtt-debug'),
               icon: const Icon(Icons.settings, size: 18),
               label: const Text('去连接'),
               style: FilledButton.styleFrom(

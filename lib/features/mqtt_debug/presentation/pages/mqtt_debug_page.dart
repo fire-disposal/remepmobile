@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:flutter_modular/flutter_modular.dart';
+import '../../../../core/di/service_locator.dart';
 
 import '../../../../core/widgets.dart';
 import '../../data/models/mqtt_models.dart';
@@ -54,7 +54,7 @@ class _MqttDebugPageState extends State<MqttDebugPage>
   }
 
   void _loadConfigFromController() {
-    final controller = Modular.get<MqttDebugController>();
+    final controller = getIt<MqttDebugController>();
     final config = controller.cachedConfig;
     if (config != null) {
       _brokerController.text = config.broker;
@@ -119,9 +119,9 @@ class _MqttDebugPageState extends State<MqttDebugPage>
   /// 连接配置Tab
   Widget _buildConnectionTab(BuildContext context) {
     return ListenableBuilder(
-      listenable: Modular.get<MqttDebugController>(),
+      listenable: getIt<MqttDebugController>(),
       builder: (context, _) {
-        final controller = Modular.get<MqttDebugController>();
+        final controller = getIt<MqttDebugController>();
         final mqttState = controller.state;
 
         return SingleChildScrollView(
@@ -477,9 +477,9 @@ class _MqttDebugPageState extends State<MqttDebugPage>
   /// 消息构建Tab
   Widget _buildBuilderTab(BuildContext context) {
     return ListenableBuilder(
-      listenable: Modular.get<MqttDebugController>(),
+      listenable: getIt<MqttDebugController>(),
       builder: (context, _) {
-        final controller = Modular.get<MqttDebugController>();
+        final controller = getIt<MqttDebugController>();
         final mqttState = controller.state;
 
         return SingleChildScrollView(
@@ -674,9 +674,9 @@ class _MqttDebugPageState extends State<MqttDebugPage>
   /// 消息历史Tab
   Widget _buildHistoryTab(BuildContext context) {
     return ListenableBuilder(
-      listenable: Modular.get<MqttDebugController>(),
+      listenable: getIt<MqttDebugController>(),
       builder: (context, _) {
-        final controller = Modular.get<MqttDebugController>();
+        final controller = getIt<MqttDebugController>();
         final messages = controller.state.messageHistory;
 
         if (messages.isEmpty) {
