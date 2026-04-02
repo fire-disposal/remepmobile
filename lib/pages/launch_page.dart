@@ -12,13 +12,11 @@ class _LaunchPageState extends State<LaunchPage> {
   @override
   void initState() {
     super.initState();
-    _boot();
-  }
-
-  Future<void> _boot() async {
-    if (!mounted) return;
-    // 直接进入主应用，不再检查登录状态
-    context.go('/app/fall-detector');
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.go('/app/fall-detector');
+      }
+    });
   }
 
   @override
