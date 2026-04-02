@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 
 import '../app_sections.dart';
-import '../core/auth/session_service.dart';
 
 class AppShellPage extends StatefulWidget {
   const AppShellPage({super.key});
@@ -51,13 +50,6 @@ class _AppShellPageState extends State<AppShellPage> {
             child: Scaffold(
               appBar: AppBar(
                 title: Text(appSections[selectedIndex].label),
-                actions: [
-                  IconButton(
-                    tooltip: '退出登录',
-                    onPressed: _handleLogout,
-                    icon: const Icon(Icons.logout),
-                  ),
-                ],
               ),
               body: const RouterOutlet(),
             ),
@@ -67,10 +59,4 @@ class _AppShellPageState extends State<AppShellPage> {
     );
   }
 
-  Future<void> _handleLogout() async {
-    final session = Modular.get<SessionService>();
-    await session.logout();
-    if (!mounted) return;
-    Modular.to.navigate('/login');
-  }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter_modular/flutter_modular.dart';
 
 import '../features/fall_detector/data/services/fall_detector_service.dart';
+import '../features/fall_detector/data/services/model_manager_service.dart';
 import '../features/fall_detector/presentation/controllers/fall_detector_controller.dart';
 import '../features/mqtt_debug/data/services/mqtt_debug_service.dart';
 import '../features/mqtt_debug/presentation/controllers/mqtt_debug_controller.dart';
@@ -35,7 +36,15 @@ class CoreModule extends Module {
     i.addLazySingleton<MqttDebugService>(MqttDebugService.new);
     i.addLazySingleton<MqttDebugController>(MqttDebugController.new);
     i.addLazySingleton<FallDetectorService>(FallDetectorService.new);
-    i.addLazySingleton<FallDetectorController>(FallDetectorController.new);
+    i.addLazySingleton<ModelManagerService>(ModelManagerService.new);
+    i.addLazySingleton<FallDetectorController>(
+      () => FallDetectorController(
+        i.get<FallDetectorService>(),
+        i.get<MqttService>(),
+        i.get<PermissionService>(),
+        i.get<ModelManagerService>(),
+      ),
+    );
     i.addLazySingleton<SettingsController>(SettingsController.new);
   }
 }
