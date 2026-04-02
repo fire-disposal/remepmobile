@@ -17,6 +17,7 @@ class FallDetectorState {
     this.permissionGranted = false,
     this.cameraReady = false,
     this.detecting = false,
+    this.isSending = false,
     this.error,
     this.lastInference,
     this.statistics = const SendStatistics(),
@@ -27,6 +28,7 @@ class FallDetectorState {
   final bool permissionGranted;
   final bool cameraReady;
   final bool detecting;
+  final bool isSending;
   final String? error;
   final FallInferenceResult? lastInference;
   final SendStatistics statistics;
@@ -37,6 +39,7 @@ class FallDetectorState {
     bool? permissionGranted,
     bool? cameraReady,
     bool? detecting,
+    bool? isSending,
     String? error,
     FallInferenceResult? lastInference,
     SendStatistics? statistics,
@@ -47,6 +50,7 @@ class FallDetectorState {
       permissionGranted: permissionGranted ?? this.permissionGranted,
       cameraReady: cameraReady ?? this.cameraReady,
       detecting: detecting ?? this.detecting,
+      isSending: isSending ?? this.isSending,
       error: error,
       lastInference: lastInference ?? this.lastInference,
       statistics: statistics ?? this.statistics,
@@ -96,6 +100,10 @@ class FallDetectorController extends ChangeNotifier {
 
   bool _busy = false;
   int _frameCounter = 0;
+  Timer? _autoSendTimer;
+  bool _isAutoSendEnabled = false;
+
+  bool get isAutoSendEnabled => _isAutoSendEnabled;
 
   Future<void> setup() async {
     final modelState = await _modelManager.refresh(modelConfig);
@@ -261,8 +269,155 @@ class FallDetectorController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<bool> sendFallEvent({
+    required String serialNumber,
+    required FallEventType eventType,
+    required double confidence,
+    bool autoTimestamp = true,
+  }) async {
+    _state = _state.copyWith(isSending: true);
+    notifyListeners();
+
+    final payload = FallEventPayload(
+      serialNumber: serialNumber,
+      eventType: eventType,
+      inference: FallInferenceResult(
+        box: DetectionBox(
+          left: 0.2,
+          top: 0.3,
+          width: 0.4,
+          height: 0.5,
+          confidence: confidence.clamp(0.0, 1.0),
+        ),
+        isFallSuspected: eventType == FallEventType.fallAlert,
+        isFallConfirmed: eventType == FallEventType.fallConfirmed || eventType == FallEventType.personFall,
+        ratioDelta: 0.35,
+        timestamp: autoTimestamp ? DateTime.now() : DateTime.now().toUtc(),
+        modelName: 'simulator',
+      ),
+    );
+
+    final success = await _service.sendEvent(payload);
+
+    if (success) {
+      _state = _state.copyWith(
+        isSending: false,
+        statistics: _state.statistics.copyWith(
+          totalSendCount: _state.statistics.totalSendCount + 1,
+          manualSendCount: _state.statistics.manualSendCount + 1,
+          lastSendTime: DateTime.now(),
+        ),
+      );
+    } else {
+      _state = _state.copyWith(isSending: false, error: '发送失败');
+    }
+    notifyListeners();
+    return success;
+  }
+
+  Future<bool> sendDeviceData({
+    required String serialNumber,
+    required DeviceType deviceType,
+    bool autoTimestamp = true,
+  }) async {
+    _state = _state.copyWith(isSending: true);
+    notifyListeners();
+
+    final data = _generateMockData(deviceType);
+    final message = DeviceDataMessage(
+      deviceType: deviceType.value,
+      timestamp: autoTimestamp ? DateTime.now().toUtc().toIso8601String() : null,
+      data: data,
+    );
+
+    try {
+      _mqttService.publish(
+        topic: 'remipedia/$serialNumber/device',
+        message: message.toJsonString(),
+      );
+      _state = _state.copyWith(
+        isSending: false,
+        statistics: _state.statistics.copyWith(
+          totalSendCount: _state.statistics.totalSendCount + 1,
+          manualSendCount: _state.statistics.manualSendCount + 1,
+          lastSendTime: DateTime.now(),
+        ),
+      );
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _state = _state.copyWith(isSending: false, error: '发送失败: $e');
+      notifyListeners();
+      return false;
+    }
+  }
+
+  void startAutoSend({
+    required String serialNumber,
+    required FallEventType eventType,
+    required double confidence,
+    required int intervalSeconds,
+  }) {
+    _isAutoSendEnabled = true;
+    _autoSendTimer?.cancel();
+    _autoSendTimer = Timer.periodic(Duration(seconds: intervalSeconds), (_) async {
+      if (!_state.isConnected) return;
+      final payload = FallEventPayload(
+        serialNumber: serialNumber,
+        eventType: eventType,
+        inference: FallInferenceResult(
+          box: DetectionBox(
+            left: 0.2,
+            top: 0.3,
+            width: 0.4,
+            height: 0.5,
+            confidence: confidence.clamp(0.0, 1.0),
+          ),
+          isFallSuspected: eventType == FallEventType.fallAlert,
+          isFallConfirmed: eventType == FallEventType.fallConfirmed || eventType == FallEventType.personFall,
+          ratioDelta: 0.35,
+          timestamp: DateTime.now(),
+          modelName: 'simulator_auto',
+        ),
+      );
+      final success = await _service.sendEvent(payload);
+      if (success) {
+        _state = _state.copyWith(
+          statistics: _state.statistics.copyWith(
+            totalSendCount: _state.statistics.totalSendCount + 1,
+            autoSendCount: _state.statistics.autoSendCount + 1,
+            lastSendTime: DateTime.now(),
+          ),
+        );
+        notifyListeners();
+      }
+    });
+    notifyListeners();
+  }
+
+  void stopAutoSend() {
+    _isAutoSendEnabled = false;
+    _autoSendTimer?.cancel();
+    _autoSendTimer = null;
+    notifyListeners();
+  }
+
+  List<int> _generateMockData(DeviceType type) {
+    switch (type) {
+      case DeviceType.heartRateMonitor:
+        return [72, 75, 78, 73, 76];
+      case DeviceType.spo2Sensor:
+        return [98, 97, 99, 98, 97];
+      case DeviceType.smartWatch:
+        return [8500, 72, 98, 120, 80];
+      case DeviceType.fallDetector:
+        return [10, 20, 30, 40, 50, 60];
+    }
+  }
+
   @override
   void dispose() {
+    stopAutoSend();
     stopDetection();
     _statusSubscription?.cancel();
     _cameraController?.dispose();

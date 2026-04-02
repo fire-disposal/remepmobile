@@ -35,7 +35,7 @@ class LiteHumanDetector {
       sum += yPlane[i];
       count += 1;
     }
-    final meanLuma = count == 0 ? 0 : sum / count;
+    final meanLuma = count == 0 ? 0.0 : sum / count;
 
     final motion = (meanLuma - _lastMeanLuma).abs() / 255;
     _lastMeanLuma = meanLuma;
