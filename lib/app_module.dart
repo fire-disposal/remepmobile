@@ -7,7 +7,6 @@ import 'features/fall_detector/presentation/pages/fall_detector_page.dart';
 import 'features/mqtt_debug/presentation/pages/mqtt_debug_page.dart';
 import 'features/settings/presentation/pages/settings_page.dart';
 import 'pages/app_shell_page.dart';
-import 'pages/guards/auth_guard.dart';
 import 'pages/home/dashboard_page.dart';
 import 'pages/launch_page.dart';
 
@@ -22,7 +21,6 @@ class AppModule extends Module {
 
     r.child(
       '/app',
-      guards: [AuthGuard()],
       child: (_) => const AppShellPage(),
       children: [
         ChildRoute(appSections[0].childPath, child: (_) => const DashboardPage()),

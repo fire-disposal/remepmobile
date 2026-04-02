@@ -1,225 +1,272 @@
 import 'dart:async';
+import 'dart:collection';
 
+import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/mqtt/mqtt_service.dart';
+import '../../../../core/services/permission_service.dart';
 import '../../data/models/fall_detection_models.dart';
 import '../../data/services/fall_detector_service.dart';
+import '../../data/services/lite_human_detector.dart';
+import '../../data/services/model_manager_service.dart';
 
-/// 跌倒检测状态
 class FallDetectorState {
-  final bool isConnected;
-  final String? error;
-  final bool isSending;
-  final SendStatistics statistics;
-
   const FallDetectorState({
     this.isConnected = false,
+    this.permissionGranted = false,
+    this.cameraReady = false,
+    this.detecting = false,
     this.error,
-    this.isSending = false,
+    this.lastInference,
     this.statistics = const SendStatistics(),
+    this.modelState = const ModelManagerState(),
   });
+
+  final bool isConnected;
+  final bool permissionGranted;
+  final bool cameraReady;
+  final bool detecting;
+  final String? error;
+  final FallInferenceResult? lastInference;
+  final SendStatistics statistics;
+  final ModelManagerState modelState;
 
   FallDetectorState copyWith({
     bool? isConnected,
+    bool? permissionGranted,
+    bool? cameraReady,
+    bool? detecting,
     String? error,
-    bool? isSending,
+    FallInferenceResult? lastInference,
     SendStatistics? statistics,
+    ModelManagerState? modelState,
   }) {
     return FallDetectorState(
       isConnected: isConnected ?? this.isConnected,
+      permissionGranted: permissionGranted ?? this.permissionGranted,
+      cameraReady: cameraReady ?? this.cameraReady,
+      detecting: detecting ?? this.detecting,
       error: error,
-      isSending: isSending ?? this.isSending,
+      lastInference: lastInference ?? this.lastInference,
       statistics: statistics ?? this.statistics,
+      modelState: modelState ?? this.modelState,
     );
   }
 }
 
-/// 跌倒检测控制器
 class FallDetectorController extends ChangeNotifier {
-  final FallDetectorService _fallDetectorService;
-  final MqttService _mqttService;
-
-  FallDetectorState _state = const FallDetectorState();
-  FallDetectorState get state => _state;
-
-  StreamSubscription<MqttConnectionStatus>? _statusSubscription;
-
-  // 自动发送相关
-  Timer? _autoSendTimer;
-  bool _autoSendEnabled = false;
-  int _autoSendInterval = 5;
-
-  FallDetectorController(this._fallDetectorService, this._mqttService) {
-    _init();
-  }
-
-  void _init() {
+  FallDetectorController(
+    this._service,
+    this._mqttService,
+    this._permissionService,
+    this._modelManager,
+  ) {
     _statusSubscription = _mqttService.statusStream.listen((status) {
       _state = _state.copyWith(
         isConnected: status == MqttConnectionStatus.connected,
-        error: status == MqttConnectionStatus.error ? '连接失败' : null,
+        error: status == MqttConnectionStatus.error ? 'MQTT连接异常' : _state.error,
       );
       notifyListeners();
     });
 
-    // 初始化连接状态
     _state = _state.copyWith(
       isConnected: _mqttService.currentStatus == MqttConnectionStatus.connected,
     );
   }
 
-  /// 发送跌倒事件
-  Future<bool> sendFallEvent({
-    required String serialNumber,
-    required FallEventType eventType,
-    required double confidence,
-    bool autoTimestamp = true,
-  }) async {
-    if (!_fallDetectorService.isConnected) {
-      _state = _state.copyWith(error: '未连接到MQTT服务器');
-      notifyListeners();
-      return false;
-    }
+  final FallDetectorService _service;
+  final MqttService _mqttService;
+  final PermissionService _permissionService;
+  final ModelManagerService _modelManager;
+  final LiteHumanDetector _detector = LiteHumanDetector();
 
-    _state = _state.copyWith(isSending: true);
+  static const modelConfig = ModelDownloadConfig.moveNetLightning;
+
+  final Queue<double> _ratioWindow = Queue<double>();
+
+  FallDetectorState _state = const FallDetectorState();
+  FallDetectorState get state => _state;
+
+  CameraController? _cameraController;
+  CameraController? get cameraController => _cameraController;
+
+  StreamSubscription<MqttConnectionStatus>? _statusSubscription;
+  DateTime? _lastEventAt;
+
+  bool _busy = false;
+  int _frameCounter = 0;
+
+  Future<void> setup() async {
+    final modelState = await _modelManager.refresh(modelConfig);
+    _state = _state.copyWith(modelState: modelState);
+
+    final granted = await _permissionService.requestCameraPermission();
+    final ok = granted == AppPermissionStatus.granted;
+    _state = _state.copyWith(permissionGranted: ok, error: ok ? null : '摄像头权限未授权');
     notifyListeners();
 
-    try {
-      final message = FallDetectionMessage(
-        eventType: eventType.value,
-        confidence: confidence.clamp(0.0, 1.0),
-        timestamp: autoTimestamp ? DateTime.now().toUtc().toIso8601String() : null,
-      );
+    if (!ok) return;
 
-      final success = await _fallDetectorService.sendFallEvent(
-        serialNumber: serialNumber,
-        message: message,
-      );
-
-      if (success) {
-        _state = _state.copyWith(
-          isSending: false,
-          statistics: _state.statistics.copyWith(
-            manualSendCount: _state.statistics.manualSendCount + 1,
-            lastSendTime: DateTime.now(),
-          ),
-        );
-      } else {
-        _state = _state.copyWith(isSending: false, error: '发送失败');
-      }
-
+    final cameras = await availableCameras();
+    if (cameras.isEmpty) {
+      _state = _state.copyWith(error: '未发现可用摄像头');
       notifyListeners();
-      return success;
-    } catch (e) {
-      _state = _state.copyWith(isSending: false, error: e.toString());
-      notifyListeners();
-      return false;
-    }
-  }
-
-  /// 发送设备数据
-  Future<bool> sendDeviceData({
-    required String serialNumber,
-    required DeviceType deviceType,
-    bool autoTimestamp = true,
-  }) async {
-    if (!_fallDetectorService.isConnected) {
-      _state = _state.copyWith(error: '未连接到MQTT服务器');
-      notifyListeners();
-      return false;
+      return;
     }
 
-    try {
-      final data = _fallDetectorService.generateMockData(deviceType);
-      final message = DeviceDataMessage(
-        deviceType: deviceType.value,
-        timestamp: autoTimestamp ? DateTime.now().toUtc().toIso8601String() : null,
-        data: data,
-      );
+    final selected = cameras.firstWhere(
+      (it) => it.lensDirection == CameraLensDirection.back,
+      orElse: () => cameras.first,
+    );
 
-      final success = await _fallDetectorService.sendDeviceData(
-        serialNumber: serialNumber,
-        message: message,
-      );
+    _cameraController = CameraController(
+      selected,
+      ResolutionPreset.medium,
+      enableAudio: false,
+      imageFormatGroup: ImageFormatGroup.yuv420,
+    );
+    await _cameraController!.initialize();
 
-      if (success) {
-        _state = _state.copyWith(
-          statistics: _state.statistics.copyWith(
-            manualSendCount: _state.statistics.manualSendCount + 1,
-            lastSendTime: DateTime.now(),
-          ),
-        );
-        notifyListeners();
-      }
-
-      return success;
-    } catch (e) {
-      _state = _state.copyWith(error: e.toString());
-      notifyListeners();
-      return false;
-    }
-  }
-
-  /// 启动自动发送
-  void startAutoSend({
-    required String serialNumber,
-    required FallEventType eventType,
-    required double confidence,
-    required int intervalSeconds,
-  }) {
-    _autoSendEnabled = true;
-    _autoSendInterval = intervalSeconds;
+    _state = _state.copyWith(cameraReady: true, error: null);
     notifyListeners();
+  }
 
-    _autoSendTimer?.cancel();
-    _autoSendTimer = Timer.periodic(Duration(seconds: intervalSeconds), (timer) async {
-      if (!_autoSendEnabled || !_fallDetectorService.isConnected) {
-        timer.cancel();
-        return;
-      }
-
-      final success = await sendFallEvent(
-        serialNumber: serialNumber,
-        eventType: eventType,
-        confidence: confidence,
-      );
-
-      if (success) {
-        _state = _state.copyWith(
-          statistics: _state.statistics.copyWith(
-            autoSendCount: _state.statistics.autoSendCount + 1,
-          ),
-        );
+  Future<void> downloadModel() async {
+    final state = await _modelManager.downloadModel(
+      modelConfig,
+      onProgress: (progressState) {
+        _state = _state.copyWith(modelState: progressState, error: progressState.error);
         notifyListeners();
+      },
+    );
+    _state = _state.copyWith(modelState: state, error: state.error);
+    notifyListeners();
+  }
+
+  Future<void> loadModel() async {
+    final state = await _modelManager.loadModel(modelConfig);
+    _state = _state.copyWith(modelState: state, error: state.error);
+    notifyListeners();
+  }
+
+  Future<void> deleteModel() async {
+    final state = await _modelManager.deleteModel(modelConfig);
+    _state = _state.copyWith(modelState: state, error: null);
+    notifyListeners();
+  }
+
+  Future<void> startDetection({required String serialNumber}) async {
+    if (_cameraController == null || !_cameraController!.value.isInitialized) {
+      _state = _state.copyWith(error: '摄像头未就绪');
+      notifyListeners();
+      return;
+    }
+
+    if (_state.detecting) return;
+
+    _ratioWindow.clear();
+
+    await _cameraController!.startImageStream((image) async {
+      if (_busy) return;
+      _busy = true;
+      try {
+        _frameCounter += 1;
+        if (_frameCounter % 5 != 0) return;
+
+        final box = _detector.infer(
+          image,
+          interpreter: _modelManager.interpreter,
+          inputSize: modelConfig.inputSize,
+        );
+        final inference = _classifyFall(box);
+
+        _state = _state.copyWith(lastInference: inference, error: null);
+        notifyListeners();
+
+        final shouldPush = inference.isFallConfirmed ||
+            (_state.statistics.totalSendCount % 30 == 0 && inference.isFallSuspected);
+
+        if (_state.isConnected && shouldPush) {
+          await _pushEvent(serialNumber, inference);
+        }
+      } finally {
+        _busy = false;
       }
     });
-  }
 
-  /// 停止自动发送
-  void stopAutoSend() {
-    _autoSendEnabled = false;
-    _autoSendTimer?.cancel();
-    _autoSendTimer = null;
+    _state = _state.copyWith(detecting: true);
     notifyListeners();
   }
 
-  /// 是否正在自动发送
-  bool get isAutoSendEnabled => _autoSendEnabled;
+  Future<void> stopDetection() async {
+    if (_cameraController != null && _cameraController!.value.isStreamingImages) {
+      await _cameraController!.stopImageStream();
+    }
+    _state = _state.copyWith(detecting: false);
+    notifyListeners();
+  }
 
-  /// 自动发送间隔
-  int get autoSendInterval => _autoSendInterval;
+  FallInferenceResult _classifyFall(DetectionBox box) {
+    final now = DateTime.now();
+    final ratio = box.aspectRatio;
 
-  /// 清除错误
-  void clearError() {
-    _state = _state.copyWith(error: null);
+    _ratioWindow.add(ratio);
+    while (_ratioWindow.length > 12) {
+      _ratioWindow.removeFirst();
+    }
+
+    final baseline = _ratioWindow.isEmpty ? ratio : _ratioWindow.first;
+    final delta = ratio - baseline;
+
+    final suspected = ratio > 0.85 && delta > 0.22;
+    final confirmed = ratio > 1.00 && delta > 0.35 && box.confidence > 0.65;
+
+    return FallInferenceResult(
+      box: box,
+      isFallSuspected: suspected,
+      isFallConfirmed: confirmed,
+      ratioDelta: delta,
+      timestamp: now,
+      modelName: _modelManager.interpreter != null ? modelConfig.name : 'fallback_proxy',
+    );
+  }
+
+  Future<void> _pushEvent(String serialNumber, FallInferenceResult inference) async {
+    final now = DateTime.now();
+    if (_lastEventAt != null && now.difference(_lastEventAt!).inSeconds < 3) return;
+
+    final type = inference.isFallConfirmed
+        ? FallEventType.fallConfirmed
+        : (inference.isFallSuspected ? FallEventType.fallAlert : FallEventType.monitoring);
+
+    final payload = FallEventPayload(
+      serialNumber: serialNumber,
+      eventType: type,
+      inference: inference,
+    );
+
+    final success = await _service.sendEvent(payload);
+    if (!success) return;
+
+    _lastEventAt = now;
+    _state = _state.copyWith(
+      statistics: _state.statistics.copyWith(
+        totalSendCount: _state.statistics.totalSendCount + 1,
+        fallEventCount:
+            _state.statistics.fallEventCount + (type == FallEventType.fallConfirmed ? 1 : 0),
+        lastSendTime: now,
+      ),
+    );
     notifyListeners();
   }
 
   @override
   void dispose() {
+    stopDetection();
     _statusSubscription?.cancel();
-    _autoSendTimer?.cancel();
+    _cameraController?.dispose();
+    _modelManager.dispose();
     super.dispose();
   }
 }

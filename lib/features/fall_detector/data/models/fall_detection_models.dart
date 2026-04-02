@@ -1,124 +1,122 @@
 import 'dart:convert';
 
-/// 跌倒检测事件类型
-enum FallEventType {
-  personFall('person_fall', '跌倒检测'),
-  personStill('person_still', '静止检测'),
-  personEnter('person_enter', '进入区域'),
-  personLeave('person_leave', '离开区域'),
-  personFallDown('person_fall_down', '跌倒'),
-  personGetUp('person_get_up', '起身');
+import 'package:flutter/material.dart';
 
-  final String value;
-  final String label;
+enum FallEventType {
+  monitoring('monitoring', '监测中'),
+  fallAlert('fall_alert', '疑似跌倒'),
+  fallConfirmed('fall_confirmed', '跌倒确认');
 
   const FallEventType(this.value, this.label);
-}
-
-/// 设备类型
-enum DeviceType {
-  heartRateMonitor('heart_rate_monitor', '心率监测器'),
-  spo2Sensor('spo2_sensor', '血氧传感器'),
-  smartWatch('smart_watch', '智能手表'),
-  fallDetector('fall_detector', '跌倒检测器');
-
   final String value;
   final String label;
-
-  const DeviceType(this.value, this.label);
 }
 
-/// 跌倒检测消息
-class FallDetectionMessage {
-  final String eventType;
-  final double confidence;
-  final String? timestamp;
-
-  const FallDetectionMessage({
-    required this.eventType,
+class DetectionBox {
+  const DetectionBox({
+    required this.left,
+    required this.top,
+    required this.width,
+    required this.height,
     required this.confidence,
-    this.timestamp,
+    this.label = 'person',
+    this.source = 'unknown',
   });
 
-  Map<String, dynamic> toJson() {
-    final json = <String, dynamic>{
-      'event_type': eventType,
-      'confidence': confidence,
-    };
-    if (timestamp != null) {
-      json['timestamp'] = timestamp;
-    }
-    return json;
-  }
+  final double left;
+  final double top;
+  final double width;
+  final double height;
+  final double confidence;
+  final String label;
+  final String source;
 
-  String toJsonString() => const JsonEncoder.withIndent('  ').convert(toJson());
+  Rect toRect(Size canvas) => Rect.fromLTWH(
+        left * canvas.width,
+        top * canvas.height,
+        width * canvas.width,
+        height * canvas.height,
+      );
 
-  factory FallDetectionMessage.fromJson(Map<String, dynamic> json) {
-    return FallDetectionMessage(
-      eventType: json['event_type'] as String,
-      confidence: (json['confidence'] as num).toDouble(),
-      timestamp: json['timestamp'] as String?,
-    );
-  }
+  double get aspectRatio => width / height;
+
+  Map<String, dynamic> toJson() => {
+        'left': left,
+        'top': top,
+        'width': width,
+        'height': height,
+        'confidence': confidence,
+        'label': label,
+        'aspect_ratio': aspectRatio,
+        'source': source,
+      };
 }
 
-/// 通用数据消息
-class DeviceDataMessage {
-  final String deviceType;
-  final String? timestamp;
-  final List<int> data;
-
-  const DeviceDataMessage({
-    required this.deviceType,
-    this.timestamp,
-    required this.data,
+class FallInferenceResult {
+  const FallInferenceResult({
+    required this.box,
+    required this.isFallSuspected,
+    required this.isFallConfirmed,
+    required this.ratioDelta,
+    required this.timestamp,
+    required this.modelName,
   });
 
-  Map<String, dynamic> toJson() {
-    final json = <String, dynamic>{
-      'device_type': deviceType,
-      'data': data,
-    };
-    if (timestamp != null) {
-      json['timestamp'] = timestamp;
-    }
-    return json;
-  }
-
-  String toJsonString() => const JsonEncoder.withIndent('  ').convert(toJson());
-
-  factory DeviceDataMessage.fromJson(Map<String, dynamic> json) {
-    return DeviceDataMessage(
-      deviceType: json['device_type'] as String,
-      timestamp: json['timestamp'] as String?,
-      data: (json['data'] as List).cast<int>(),
-    );
-  }
+  final DetectionBox box;
+  final bool isFallSuspected;
+  final bool isFallConfirmed;
+  final double ratioDelta;
+  final DateTime timestamp;
+  final String modelName;
 }
 
-/// 发送统计
+class FallEventPayload {
+  const FallEventPayload({
+    required this.serialNumber,
+    required this.eventType,
+    required this.inference,
+  });
+
+  final String serialNumber;
+  final FallEventType eventType;
+  final FallInferenceResult inference;
+
+  Map<String, dynamic> toJson() => {
+        'serial_number': serialNumber,
+        'event_type': eventType.value,
+        'event_label': eventType.label,
+        'timestamp': inference.timestamp.toUtc().toIso8601String(),
+        'model': inference.modelName,
+        'confidence': inference.box.confidence,
+        'bbox': inference.box.toJson(),
+        'ratio_delta': inference.ratioDelta,
+        'fall_suspected': inference.isFallSuspected,
+        'fall_confirmed': inference.isFallConfirmed,
+      };
+
+  String toJsonString() => const JsonEncoder.withIndent('  ').convert(toJson());
+}
+
 class SendStatistics {
-  final int manualSendCount;
-  final int autoSendCount;
+  const SendStatistics({
+    this.totalSendCount = 0,
+    this.lastSendTime,
+    this.fallEventCount = 0,
+  });
+
+  final int totalSendCount;
+  final int fallEventCount;
   final DateTime? lastSendTime;
 
-  const SendStatistics({
-    this.manualSendCount = 0,
-    this.autoSendCount = 0,
-    this.lastSendTime,
-  });
-
   SendStatistics copyWith({
-    int? manualSendCount,
-    int? autoSendCount,
+    int? totalSendCount,
     DateTime? lastSendTime,
+    int? fallEventCount,
   }) {
     return SendStatistics(
-      manualSendCount: manualSendCount ?? this.manualSendCount,
-      autoSendCount: autoSendCount ?? this.autoSendCount,
+      totalSendCount: totalSendCount ?? this.totalSendCount,
       lastSendTime: lastSendTime ?? this.lastSendTime,
+      fallEventCount: fallEventCount ?? this.fallEventCount,
     );
   }
-
-  int get totalSendCount => manualSendCount + autoSendCount;
 }
