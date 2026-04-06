@@ -8,7 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:mqtt_client/mqtt_client.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:sensors_plus/sensors_plus.dart';
+
 import 'package:tflite_flutter/tflite_flutter.dart';
 
 import '../../core/mqtt/mqtt_models.dart';
@@ -39,16 +39,20 @@ class VisionDetectionController extends ChangeNotifier {
   }
 
   CameraController? _cameraController;
-  StreamSubscription<AccelerometerEvent>? _gravitySub;
 
   bool _isInitializing = false;
+  
+  /// 模型输入数据类型（0=uint8, 1=float32）
+  int _inputTypeCode = 1;
   bool _isStreaming = false;
   bool _isFrameBeingProcessed = false;
 
   VisionModelType _selectedModel = VisionModelType.builtinPersonFast;
-  VisionAlgorithmType _selectedAlgorithm = VisionAlgorithmType.fallRuleV1;
+  VisionAlgorithmType _selectedAlgorithm = VisionAlgorithmType.keypointRelation;
   VisionPermissionState _permissionState = VisionPermissionState.unknown;
-  GravitySnapshot _gravitySnapshot = const GravitySnapshot(x: 0, y: 0, z: 9.8);
+  // 固定重力方向为正常竖屏状态（Z轴向下）
+  // 旋转功能已禁用，由系统控制屏幕方向
+  final GravitySnapshot _gravitySnapshot = const GravitySnapshot(x: 0, y: 0, z: 9.8);
   List<DetectionBox> _detections = const [];
   VisionEvent? _latestEvent;
   String _mqttBroker = 'broker.hivemq.com';
@@ -92,15 +96,16 @@ class VisionDetectionController extends ChangeNotifier {
   /// - 设置合理的超时时间和重试机制
   /// - 放宽文件大小验证（不同源可能有轻微差异）
   static const List<ModelManifest> _manifests = [
-    // 内置模型 - 随App打包的备用检测器
+    // 内置模型 - MoveNet Lightning (已放置在 assets/models/4.tflite)
+    // 下载来源: https://storage.googleapis.com/tfhub-lite-models/google/lite-model/movenet/singlepose/lightning/tflite/float16/4.tflite
     ModelManifest(
       type: VisionModelType.builtinPersonFast,
-      fileName: 'builtin_person_fast.tflite',
-      downloadUrl: '',
-      sizeLabel: '内置',
+      fileName: '4.tflite',
+      downloadUrl: 'https://storage.googleapis.com/tfhub-lite-models/google/lite-model/movenet/singlepose/lightning/tflite/float16/4.tflite',
+      sizeLabel: '内置 ~4MB',
       builtIn: true,
       version: '1.0.0',
-      expectedSize: null,
+      expectedSize: 4219168,
     ),
     
     // MoveNet Lightning - Google官方轻量级姿态估计
@@ -108,11 +113,11 @@ class VisionDetectionController extends ChangeNotifier {
     ModelManifest(
       type: VisionModelType.poseNano,
       fileName: 'movenet_lightning.tflite',
-      // 优先使用 Hugging Face（国内访问更稳定）
-      downloadUrl: 'https://huggingface.co/keras-io/movenet/resolve/main/movenet_singlepose_lightning.tflite',
+      // 优先使用 Google Storage（最稳定）
+      downloadUrl: 'https://storage.googleapis.com/movenet/singlepose_lightning.tflite',
       mirrorUrls: [
-        // Google Storage 源
-        'https://storage.googleapis.com/movenet/singlepose_lightning.tflite',
+        // TF Hub 备用
+        'https://storage.googleapis.com/tfhub-lite-models/google/lite-model/movenet/singlepose/lightning/tflite/float16/4.tflite',
       ],
       sizeLabel: '~4.2 MB',
       version: '1.0.0',
@@ -133,7 +138,9 @@ class VisionDetectionController extends ChangeNotifier {
       // 使用Hugging Face上的BlazePose TFLite模型
       downloadUrl: 'https://huggingface.co/google/mediapipe-blazepose/resolve/main/pose_detection.tflite',
       mirrorUrls: [
-        // 备用：tfhub上的模型
+        // 备用：Google Storage MediaPipe模型库
+        'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task',
+        // 备用：tfhub上的轻量级模型
         'https://storage.googleapis.com/tfhub-lite-models/google/lite-model/movenet/singlepose/lightning/tflite/float16/4.tflite',
       ],
       sizeLabel: '~5.6 MB',
@@ -145,18 +152,21 @@ class VisionDetectionController extends ChangeNotifier {
     
     // EfficientDet-Lite0 - Google轻量级目标检测 (可检测人体)
     // 源地址: https://www.tensorflow.org/lite/examples/object_detection/overview
+    // 注意：该模型文件较大，下载可能需要较长时间
     ModelManifest(
       type: VisionModelType.bodyKeypointLite,
       fileName: 'efficientdet_lite0.tflite',
+      // TensorFlow 官方模型库
       downloadUrl: 'https://storage.googleapis.com/download.tensorflow.org/models/tflite/model_zoo/upload_20200424/efficientdet_lite0_fp32_0.tflite',
       mirrorUrls: [
-        'https://huggingface.co/keras-io/efficientdet/resolve/main/efficientdet_lite0.tflite',
+        // TF Hub 镜像
+        'https://storage.googleapis.com/tfhub-lite-models/tensorflow/lite-model/efficientdet/lite0/detection/metadata/1.tflite',
       ],
-      sizeLabel: '~4.4 MB',
+      sizeLabel: '~13 MB',
       version: '1.0.0',
       format: ModelFormat.tflite,
-      // 参考大小: 约4.4MB（不同镜像源可能有差异）
-      expectedSize: 4618512,
+      // 实际文件大小约 13MB（比预期大）
+      expectedSize: 13608632,
     ),
   ];
 
@@ -172,36 +182,7 @@ class VisionDetectionController extends ChangeNotifier {
   VisionAlgorithmType get selectedAlgorithm => _selectedAlgorithm;
   VisionPermissionState get permissionState => _permissionState;
   GravitySnapshot get gravitySnapshot => _gravitySnapshot;
-  /// UI旋转圈数（0-1范围，对应0°-360°）
-  /// 
-  /// 使用 RotatedBox 友好的离散值：0, 0.25, 0.5, 0.75
-  /// 对应 quarterTurns: 0, 1, 2, 3（0°, 90°, 180°, 270°）
-  double get uiRotationTurns {
-    final x = _gravitySnapshot.x;
-    final y = _gravitySnapshot.y;
-    final absX = x.abs();
-    final absY = y.abs();
-    
-    // 重力加速度阈值，超过此值认为设备处于该方向
-    const axisThreshold = 5.0;
-    
-    // 优先判断X轴（左右倾斜）
-    if (absX > absY && absX > axisThreshold) {
-      // 手机向左倾斜（x > 0）: 右侧朝上，UI应顺时针旋转90°
-      // 手机向右倾斜（x < 0）: 左侧朝上，UI应逆时针旋转90°
-      return x > 0 ? 0.25 : 0.75;
-    }
-    
-    // 判断Y轴（前后倾斜）
-    if (absY > axisThreshold) {
-      // 手机直立（y < 0，重力指向屏幕下方）: 正常方向
-      // 手机倒置（y > 0，重力指向屏幕上方）: UI应旋转180°
-      return y < 0 ? 0.0 : 0.5;
-    }
-    
-    // 接近水平放置或Z轴为主，保持当前方向不变
-    return 0.0;
-  }
+
   List<DetectionBox> get detections => _detections;
   VisionEvent? get latestEvent => _latestEvent;
   String get mqttBroker => _mqttBroker;
@@ -227,7 +208,6 @@ class VisionDetectionController extends ChangeNotifier {
 
     try {
       await refreshPermission();
-      await _initGravity();
       await _refreshModelStates();
       if (_permissionState == VisionPermissionState.granted) {
         await _initCamera();
@@ -322,13 +302,21 @@ class VisionDetectionController extends ChangeNotifier {
         final localFile = File('${dir.path}/${manifest.fileName}');
         if (await localFile.exists()) {
           modelPath = localFile.path;
+          AppLogger.info('Using cached built-in model: $modelPath');
         } else {
           // 从assets复制
           final assetPath = 'assets/models/${manifest.fileName}';
-          final byteData = await rootBundle.load(assetPath);
-          final buffer = byteData.buffer.asUint8List();
-          await localFile.writeAsBytes(buffer, flush: true);
-          modelPath = localFile.path;
+          AppLogger.info('Loading built-in model from assets: $assetPath');
+          try {
+            final byteData = await rootBundle.load(assetPath);
+            final buffer = byteData.buffer.asUint8List();
+            AppLogger.info('Model loaded from assets, size: ${buffer.length} bytes');
+            await localFile.writeAsBytes(buffer, flush: true);
+            modelPath = localFile.path;
+            AppLogger.info('Model copied to: $modelPath');
+          } catch (e) {
+            throw Exception('无法从assets加载模型文件 $assetPath，请确保文件已放置到 assets/models/ 目录并重新构建应用: $e');
+          }
         }
       } else {
         // 下载的模型
@@ -347,17 +335,27 @@ class VisionDetectionController extends ChangeNotifier {
       _interpreter = Interpreter.fromFile(File(modelPath));
       _loadedInterpreterModel = model;
       
-      // 获取输入输出形状
+      // 获取输入输出形状和类型
       _inputShape = _interpreter!.getInputTensor(0).shape;
       _outputShape = _interpreter!.getOutputTensor(0).shape;
       
+      // 获取输入类型（uint8=0, float32=1）
+      final tensorType = _interpreter!.getInputTensor(0).type;
+      _inputTypeCode = (tensorType.toString().contains('uint8')) ? 0 : 1;
+      final typeName = _inputTypeCode == 0 ? 'uint8' : 'float32';
+      
+      // 验证输入输出形状
+      if (_inputShape.isEmpty || _outputShape.isEmpty) {
+        throw Exception('无法获取模型输入输出形状');
+      }
+      
       _latestEvent = VisionEvent(
         title: '模型加载成功',
-        detail: '${model.label} 已加载，输入形状: $_inputShape',
+        detail: '${model.label} 已加载\n输入: $_inputShape (类型: $typeName)\n输出: $_outputShape',
         timestamp: DateTime.now(),
       );
       
-      AppLogger.info('Model ${manifest.fileName} loaded successfully. Input: $_inputShape, Output: $_outputShape');
+      AppLogger.info('Model ${manifest.fileName} loaded successfully. Input: $_inputShape, type: $typeName, Output: $_outputShape');
     } catch (e) {
       _modelLoadError = e.toString();
       _interpreter = null;
@@ -733,16 +731,6 @@ class VisionDetectionController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> _initGravity() async {
-    await _gravitySub?.cancel();
-    _gravitySub = accelerometerEventStream(
-      samplingPeriod: SensorInterval.gameInterval,
-    ).listen((event) {
-      _gravitySnapshot = GravitySnapshot(x: event.x, y: event.y, z: event.z);
-      notifyListeners();
-    });
-  }
-
   Future<void> _initCamera() async {
     final cameras = await availableCameras();
     final backCamera = cameras.where((e) => e.lensDirection == CameraLensDirection.back);
@@ -752,7 +740,9 @@ class VisionDetectionController extends ChangeNotifier {
     _cameraController = CameraController(
       camera,
       ResolutionPreset.medium,
-      imageFormatGroup: ImageFormatGroup.yuv420,
+      // 使用 NV21 格式可能减少 qdgralloc 日志
+      // 如仍出现大量日志，这是设备驱动层的正常警告，不影响功能
+      imageFormatGroup: ImageFormatGroup.nv21,
       enableAudio: false,
     );
 
@@ -854,67 +844,140 @@ class VisionDetectionController extends ChangeNotifier {
 
   /// 使用TFLite模型进行推理
   List<DetectionBox> _runTFLiteInference(CameraImage image) {
-    if (_interpreter == null) return const [];
+    if (_interpreter == null) {
+      AppLogger.warning('Interpreter is null');
+      return const [];
+    }
+
+    // 检查输入输出形状是否有效
+    if (_inputShape.isEmpty || _outputShape.isEmpty) {
+      AppLogger.warning('Invalid input/output shape: input=$_inputShape, output=$_outputShape');
+      return const [];
+    }
 
     // 预处理：将CameraImage转换为模型输入格式
-    final inputBuffer = _preprocessImage(image);
-    if (inputBuffer == null) return const [];
+    final List<dynamic>? inputBuffer = _preprocessImage(image);
+    if (inputBuffer == null) {
+      AppLogger.warning('Preprocessing failed');
+      return const [];
+    }
 
-    // 准备输出缓冲区
-    final outputBuffer = List<double>.generate(
-      _outputShape.reduce((a, b) => a * b),
-      (_) => 0.0,
-    ).reshape<List<double>>(_outputShape);
+    try {
+      // 根据输出形状准备输出缓冲区
+      // MoveNet Lightning: [1, 17, 3]
+      late final List<dynamic> outputBuffer;
+      
+      if (_outputShape.length == 3 && _outputShape[1] == 17 && _outputShape[2] == 3) {
+        // MoveNet 输出格式: [1, 17, 3] - 每个点是 [y, x, confidence]
+        outputBuffer = List.generate(1, (_) => 
+          List.generate(17, (_) => List<double>.filled(3, 0.0))
+        );
+      } else {
+        // 通用输出格式
+        outputBuffer = List.generate(_outputShape[0], (_) => 
+          List.generate(_outputShape.length > 1 ? _outputShape[1] : 1, (_) => 0.0)
+        );
+      }
 
-    // 运行推理
-    _interpreter!.run(inputBuffer, outputBuffer);
+      // 运行推理
+      AppLogger.debug('Running inference with input type: ${_inputTypeCode == 0 ? "uint8" : "float32"}');
+      _interpreter!.run(inputBuffer, outputBuffer);
 
-    // 后处理：解析检测结果
-    return _postprocessOutput(outputBuffer, image.width, image.height);
+      // 后处理：解析检测结果
+      return _postprocessOutput(outputBuffer, image.width, image.height);
+    } catch (e, stackTrace) {
+      AppLogger.error('TFLite inference error', e, stackTrace);
+      return const [];
+    }
   }
 
   /// 图像预处理：将YUV420转换为模型输入
   /// 
-  /// 支持常见的TFLite检测模型输入格式
-  List<List<List<List<double>>>>? _preprocessImage(CameraImage image) {
+  /// 根据模型输入类型自动选择数据格式：
+  /// - uint8: 返回 0-255 的整数
+  /// - float32: 返回 0.0-1.0 的浮点数（归一化）
+  /// 
+  /// 使用类型显式声明确保 TFLite 能正确处理
+  List<dynamic>? _preprocessImage(CameraImage image) {
     try {
       // 获取模型期望的输入尺寸
       final targetHeight = _inputShape[1];
       final targetWidth = _inputShape[2];
       final channels = _inputShape.length > 3 ? _inputShape[3] : 1;
 
-      // 从YUV420提取灰度图
-      final plane = image.planes.first;
-      final luma = plane.bytes;
-      final bytesPerPixel = plane.bytesPerPixel ?? 1;
-      final rowStride = plane.bytesPerRow;
+      // 从YUV420提取数据
+      final yPlane = image.planes[0].bytes;
+      final yRowStride = image.planes[0].bytesPerRow;
 
-      // 创建归一化的输入张量 [1, height, width, channels]
-      final input = List.generate(
-        1,
-        (_) => List.generate(
-          targetHeight,
-          (y) => List.generate(
-            targetWidth,
-            (x) {
-              // 双线性插值采样
-              final srcX = (x * image.width / targetWidth).floor();
-              final srcY = (y * image.height / targetHeight).floor();
-              final index = srcY * rowStride + srcX * bytesPerPixel;
-              
-              if (index < 0 || index >= luma.length) {
-                return List.filled(channels, 0.0);
-              }
-              
-              // 归一化到[0, 1]或[-1, 1]
-              final value = luma[index] / 255.0;
-              return List.filled(channels, value);
-            },
-          ),
-        ),
-      );
+      // 根据输入类型决定数据格式 (0=uint8, 1=float32)
+      final isUint8 = _inputTypeCode == 0;
+      final typeName = isUint8 ? 'uint8' : 'float32';
+      
+      AppLogger.debug('Preprocessing: ${image.width}x${image.height} -> ${targetWidth}x$targetHeight, ch=$channels, type=$typeName');
 
-      return input;
+      // 创建输入张量 [1, height, width, channels]
+      if (isUint8) {
+        // uint8 格式：直接返回 0-255 的整数
+        // 使用显式类型声明 List<List<List<List<int>>>>
+        final List<List<List<List<int>>>> input = [];
+        final batch = <List<List<int>>>[];
+        
+        for (int y = 0; y < targetHeight; y++) {
+          final row = <List<int>>[];
+          for (int x = 0; x < targetWidth; x++) {
+            // 双线性插值采样
+            final srcX = (x * (image.width - 1) / (targetWidth - 1)).clamp(0, image.width - 1);
+            final srcY = (y * (image.height - 1) / (targetHeight - 1)).clamp(0, image.height - 1);
+            final srcXi = srcX.round();
+            final srcYi = srcY.round();
+            
+            // 获取Y值（亮度）
+            final yIndex = srcYi * yRowStride + srcXi;
+            final yValue = (yIndex < yPlane.length) ? yPlane[yIndex] : 0;
+            
+            // uint8: 直接返回 0-255
+            if (channels == 3) {
+              row.add([yValue, yValue, yValue]);
+            } else {
+              row.add([yValue]);
+            }
+          }
+          batch.add(row);
+        }
+        input.add(batch);
+        return input;
+      } else {
+        // float32 格式：归一化到 0.0-1.0
+        // 使用显式类型声明 List<List<List<List<double>>>>
+        final List<List<List<List<double>>>> input = [];
+        final batch = <List<List<double>>>[];
+        
+        for (int y = 0; y < targetHeight; y++) {
+          final row = <List<double>>[];
+          for (int x = 0; x < targetWidth; x++) {
+            // 双线性插值采样
+            final srcX = (x * (image.width - 1) / (targetWidth - 1)).clamp(0, image.width - 1);
+            final srcY = (y * (image.height - 1) / (targetHeight - 1)).clamp(0, image.height - 1);
+            final srcXi = srcX.round();
+            final srcYi = srcY.round();
+            
+            // 获取Y值（亮度）
+            final yIndex = srcYi * yRowStride + srcXi;
+            final yValue = (yIndex < yPlane.length) ? yPlane[yIndex] : 0;
+            
+            // float32: 归一化到 [0, 1]
+            final normalizedY = yValue / 255.0;
+            if (channels == 3) {
+              row.add([normalizedY, normalizedY, normalizedY]);
+            } else {
+              row.add([normalizedY]);
+            }
+          }
+          batch.add(row);
+        }
+        input.add(batch);
+        return input;
+      }
     } catch (e) {
       AppLogger.error('Image preprocessing failed', e);
       return null;
@@ -934,7 +997,9 @@ class VisionDetectionController extends ChangeNotifier {
       final outputShape = _outputShape;
       
       // MoveNet Lightning: [1, 17, 3] - 17个COCO关键点
-      if (_selectedModel == VisionModelType.poseNano && 
+      // 内置模型和 poseNano 都使用 MoveNet 后处理
+      if ((_selectedModel == VisionModelType.poseNano || 
+           _selectedModel == VisionModelType.builtinPersonFast) && 
           outputShape.length == 3 && 
           outputShape[1] == 17 && 
           outputShape[2] == 3) {
@@ -1157,7 +1222,7 @@ class VisionDetectionController extends ChangeNotifier {
   _ModelSpec _modelSpecFor(VisionModelType model) {
     return switch (model) {
       VisionModelType.builtinPersonFast => const _ModelSpec(
-          label: 'Person/Fast',
+          label: 'MoveNet/Built-in',
           baseWidth: 0.26,
           baseHeight: 0.54,
           motionWidthGain: 0.18,
@@ -1192,33 +1257,33 @@ class VisionDetectionController extends ChangeNotifier {
   }
 
   // 算法参数
-  AlgorithmParams _algorithmParams = AlgorithmParams.defaultFor(VisionAlgorithmType.fallRuleV1);
+  AlgorithmParams _algorithmParams = AlgorithmParams.defaultFor(VisionAlgorithmType.keypointRelation);
 
   void _evaluateEvent() {
     if (_detections.isEmpty) {
       return;
     }
 
-    // 检查置信度
     final box = _detections.first;
-    if (box.confidence < _algorithmParams.confidenceThreshold) {
-      return;
-    }
-
-    final ratio = box.normalizedRect.width / box.normalizedRect.height;
-    final centerY = box.normalizedRect.center.dy;
-
+    final now = DateTime.now();
+    
+    // 提取关键点数据（如果有）
+    final keyPoints = box.keyPoints;
+    
+    // 计算特征
     final frame = _FrameFeature(
-      ts: DateTime.now(),
-      aspectRatio: ratio,
-      centerY: centerY,
-      dominantAxis: _gravitySnapshot.dominantAxis,
+      ts: now,
+      aspectRatio: box.normalizedRect.width / box.normalizedRect.height,
+      centerY: box.normalizedRect.center.dy,
+      torsoAngle: _calculateTorsoAngle(keyPoints),
+      keyPointCount: keyPoints?.where((kp) => kp.confidence > _algorithmParams.keypointConfidenceThreshold).length ?? 0,
     );
+    
     _history.add(frame);
 
     // 根据参数动态调整时间窗口
     final timeWindow = Duration(milliseconds: _algorithmParams.timeWindowMs);
-    final cutoff = DateTime.now().subtract(timeWindow);
+    final cutoff = now.subtract(timeWindow);
     _history.removeWhere((f) => f.ts.isBefore(cutoff));
 
     // 需要至少2帧才能进行时序分析
@@ -1227,46 +1292,123 @@ class VisionDetectionController extends ChangeNotifier {
     }
 
     final first = _history.first;
-    final ratioGrowth = ratio - first.aspectRatio;
-    final dropDistance = centerY - first.centerY;
-    
-    // 使用参数阈值进行评估
-    final visualLying = ratio > _algorithmParams.aspectRatioThreshold;
-    final trendFast = ratioGrowth > _algorithmParams.trendThreshold && 
-                      dropDistance > _algorithmParams.positionDropThreshold;
-    final gravitySupport = _algorithmParams.enableGravityCheck && 
-                           _gravitySnapshot.dominantAxis != 'Z';
-
     final fallDetected = switch (_selectedAlgorithm) {
-      VisionAlgorithmType.fallRuleV1 => visualLying && trendFast && gravitySupport,
-      VisionAlgorithmType.motionTrend => visualLying && trendFast,
-      VisionAlgorithmType.hybridScore => visualLying && (trendFast || gravitySupport),
+      VisionAlgorithmType.keypointRelation => _detectFallByKeypointRelation(frame, first),
+      VisionAlgorithmType.bboxTrend => _detectFallByBboxTrend(frame, first),
     };
 
     if (fallDetected && !_fallAlarmOn) {
       _fallAlarmOn = true;
+      final detail = switch (_selectedAlgorithm) {
+        VisionAlgorithmType.keypointRelation => 
+          '躯干角度=${frame.torsoAngle?.toStringAsFixed(1)}°, '
+          '关键点=${frame.keyPointCount}/${_algorithmParams.minKeyPoints}',
+        VisionAlgorithmType.bboxTrend => 
+          '长宽比=${frame.aspectRatio.toStringAsFixed(2)}, '
+          '下降速度=${((frame.centerY - first.centerY) * 1000 / _algorithmParams.timeWindowMs).toStringAsFixed(2)}/s',
+      };
       _latestEvent = VisionEvent(
         title: '疑似跌倒事件',
-        detail:
-            'ratio=${ratio.toStringAsFixed(2)}, Δratio=${ratioGrowth.toStringAsFixed(2)}, '
-            'Δy=${dropDistance.toStringAsFixed(2)}, 重力轴=${_gravitySnapshot.dominantAxis}\n'
-            '算法: ${_selectedAlgorithm.label}',
-        timestamp: DateTime.now(),
+        detail: '$detail\n算法: ${_selectedAlgorithm.label}',
+        timestamp: now,
         level: VisionEventLevel.error,
       );
       _publishEvent();
       return;
     }
 
-    if (!fallDetected && _fallAlarmOn && ratio < 0.85) {
+    if (!fallDetected && _fallAlarmOn && frame.aspectRatio < 0.85) {
       _fallAlarmOn = false;
       _latestEvent = VisionEvent(
         title: '跌倒告警解除',
-        detail: '人体框比例恢复直立趋势。',
-        timestamp: DateTime.now(),
+        detail: '姿态恢复正常。',
+        timestamp: now,
         level: VisionEventLevel.success,
       );
     }
+  }
+
+  /// 基于关键点关系检测跌倒
+  /// 
+  /// 核心逻辑：
+  /// 1. 检查有效关键点数量
+  /// 2. 计算躯干角度（肩膀中心到臀部中心的连线与垂直方向的夹角）
+  /// 3. 角度超过阈值认为可能跌倒
+  bool _detectFallByKeypointRelation(_FrameFeature current, _FrameFeature first) {
+    // 关键点数量不足
+    if (current.keyPointCount < _algorithmParams.minKeyPoints) {
+      return false;
+    }
+
+    final angle = current.torsoAngle;
+    if (angle == null) return false;
+
+    // 躯干角度超过阈值（人躺下时角度接近90度）
+    return angle > _algorithmParams.fallAngleThreshold;
+  }
+
+  /// 基于识别框趋势检测跌倒
+  /// 
+  /// 核心逻辑：
+  /// 1. 检测框长宽比变化（倒下时宽度>高度，长宽比>1）
+  /// 2. 垂直方向快速下降
+  bool _detectFallByBboxTrend(_FrameFeature current, _FrameFeature first) {
+    // 长宽比超过阈值（框变扁）
+    final isFlattened = current.aspectRatio > _algorithmParams.aspectRatioThreshold;
+    
+    // 计算垂直下降速度（每秒下降的屏幕比例）
+    final timeDiff = current.ts.difference(first.ts).inMilliseconds / 1000.0;
+    if (timeDiff <= 0) return false;
+    
+    final verticalSpeed = (current.centerY - first.centerY) / timeDiff;
+    final isDroppingFast = verticalSpeed > _algorithmParams.verticalSpeedThreshold;
+
+    return isFlattened && isDroppingFast;
+  }
+
+  /// 计算躯干角度（肩膀中心到臀部中心的连线与垂直方向的夹角）
+  /// 
+  /// 返回值：角度（度），0表示直立，90表示平躺
+  double? _calculateTorsoAngle(List<KeyPoint>? keyPoints) {
+    if (keyPoints == null || keyPoints.length < 13) return null;
+
+    // 肩膀中心（关键点5和6）
+    final leftShoulder = keyPoints[5];
+    final rightShoulder = keyPoints[6];
+    
+    // 臀部中心（关键点11和12）
+    final leftHip = keyPoints[11];
+    final rightHip = keyPoints[12];
+
+    // 检查关键点置信度
+    final minConfidence = _algorithmParams.keypointConfidenceThreshold;
+    if (leftShoulder.confidence < minConfidence ||
+        rightShoulder.confidence < minConfidence ||
+        leftHip.confidence < minConfidence ||
+        rightHip.confidence < minConfidence) {
+      return null;
+    }
+
+    // 计算中心点
+    final shoulderCenter = Offset(
+      (leftShoulder.normalizedPosition.dx + rightShoulder.normalizedPosition.dx) / 2,
+      (leftShoulder.normalizedPosition.dy + rightShoulder.normalizedPosition.dy) / 2,
+    );
+    
+    final hipCenter = Offset(
+      (leftHip.normalizedPosition.dx + rightHip.normalizedPosition.dx) / 2,
+      (leftHip.normalizedPosition.dy + rightHip.normalizedPosition.dy) / 2,
+    );
+
+    // 计算躯干向量（从臀部到肩膀）
+    final dx = shoulderCenter.dx - hipCenter.dx;
+    final dy = shoulderCenter.dy - hipCenter.dy;
+
+    // 计算与垂直方向的夹角（atan2(dx, -dy) 因为y轴向下）
+    final angleRad = atan2(dx.abs(), -dy);
+    final angleDeg = angleRad * 180 / pi;
+
+    return angleDeg;
   }
 
   Future<void> updateMqttConfig({required String broker, required int port}) async {
@@ -1358,7 +1500,7 @@ class VisionDetectionController extends ChangeNotifier {
     _latestEvent = VisionEvent(
       title: '算法已切换',
       detail: '当前算法：${algorithm.label}\n'
-              '阈值: ${_algorithmParams.confidenceThreshold.toStringAsFixed(2)}, '
+              '关键点置信度: ${_algorithmParams.keypointConfidenceThreshold.toStringAsFixed(2)}, '
               '时间窗: ${_algorithmParams.timeWindowMs}ms',
       timestamp: DateTime.now(),
     );
@@ -1370,8 +1512,9 @@ class VisionDetectionController extends ChangeNotifier {
     _algorithmParams = params;
     _latestEvent = VisionEvent(
       title: '算法参数更新',
-      detail: '置信度阈值: ${params.confidenceThreshold.toStringAsFixed(2)}, '
-              '时序窗口: ${params.timeWindowMs}ms',
+      detail: '关键点置信度: ${params.keypointConfidenceThreshold.toStringAsFixed(2)}, '
+              '时序窗口: ${params.timeWindowMs}ms, '
+              '躯干角度阈值: ${params.fallAngleThreshold.toStringAsFixed(0)}°',
       timestamp: DateTime.now(),
     );
     notifyListeners();
@@ -1414,7 +1557,6 @@ class VisionDetectionController extends ChangeNotifier {
 
   @override
   void dispose() {
-    _gravitySub?.cancel();
     _cameraController?.dispose();
     _interpreter?.close();
     _dio.close();
@@ -1440,17 +1582,22 @@ class _ModelSpec {
   });
 }
 
+/// 帧特征数据
+/// 
+/// 用于时序分析的关键帧信息
 class _FrameFeature {
   final DateTime ts;
-  final double aspectRatio;
-  final double centerY;
-  final String dominantAxis;
+  final double aspectRatio;  // 检测框长宽比
+  final double centerY;      // 检测框中心Y坐标
+  final double? torsoAngle;  // 躯干角度（度），null表示无法计算
+  final int keyPointCount;   // 有效关键点数量
 
   const _FrameFeature({
     required this.ts,
     required this.aspectRatio,
     required this.centerY,
-    required this.dominantAxis,
+    this.torsoAngle,
+    required this.keyPointCount,
   });
 }
 

@@ -52,14 +52,59 @@ class DetectionOverlayPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
 
     for (final box in boxes) {
-      // 绘制检测框
-      _drawDetectionBox(canvas, size, box, borderPaint, fillPaint);
-      
-      // 绘制关键点（如果有）
+      // 优先绘制关键点（MoveNet等姿态模型）
       if (box.hasKeyPoints) {
         _drawKeyPoints(canvas, size, box.keyPoints!);
+        // 有关键点的模型不绘制检测框，只显示标签
+        _drawLabelOnly(canvas, size, box);
+      } else {
+        // 没有关键点的模型（备用模式）绘制检测框
+        _drawDetectionBox(canvas, size, box, borderPaint, fillPaint);
       }
     }
+  }
+
+  /// 仅绘制标签（用于关键点模型）
+  void _drawLabelOnly(Canvas canvas, Size size, DetectionBox box) {
+    // 计算标签位置（使用检测框中心上方）
+    final centerX = (box.normalizedRect.left + box.normalizedRect.width / 2) * size.width;
+    final topY = box.normalizedRect.top * size.height;
+    
+    final textPainter = TextPainter(
+      textDirection: TextDirection.ltr,
+      text: TextSpan(
+        text: '${box.label} ${(box.confidence * 100).toStringAsFixed(0)}%',
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w700,
+          fontSize: 12,
+          shadows: [
+            Shadow(
+              offset: Offset(0, 1),
+              blurRadius: 3,
+              color: Colors.black54,
+            ),
+          ],
+        ),
+      ),
+    )..layout();
+
+    final tagRect = Rect.fromCenter(
+      center: Offset(centerX, (topY - 15).clamp(20, size.height - 20)),
+      width: textPainter.width + 16,
+      height: 24,
+    );
+
+    // 绘制半透明背景
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(tagRect, const Radius.circular(12)),
+      Paint()..color = Colors.black.withValues(alpha: 0.6),
+    );
+    
+    textPainter.paint(
+      canvas, 
+      Offset(tagRect.left + 8, tagRect.top + 4),
+    );
   }
 
   /// 绘制检测框

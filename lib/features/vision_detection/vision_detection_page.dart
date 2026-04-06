@@ -58,64 +58,79 @@ class _VisionDetectionPageState extends State<VisionDetectionPage> {
       builder: (context) => SafeArea(
         child: AnimatedBuilder(
           animation: _controller,
-          builder: (context, _) => Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 18),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('模型管理', style: Theme.of(context).textTheme.titleMedium),
-                    if (_controller.isModelLoading)
-                      const Row(
-                        mainAxisSize: MainAxisSize.min,
+          builder: (context, _) => ConstrainedBox(
+            // 限制最大高度为屏幕的85%，防止溢出
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.85,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 18),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('模型管理', style: Theme.of(context).textTheme.titleMedium),
+                      if (_controller.isModelLoading)
+                        const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                            SizedBox(width: 8),
+                            Text('加载中...', style: TextStyle(fontSize: 12)),
+                          ],
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  if (_controller.modelLoadError != null)
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      margin: const EdgeInsets.only(bottom: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(
                         children: [
-                          SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                          const Icon(Icons.error_outline, color: Colors.red, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _controller.modelLoadError!,
+                              style: const TextStyle(color: Colors.red, fontSize: 12),
+                            ),
                           ),
-                          SizedBox(width: 8),
-                          Text('加载中...', style: TextStyle(fontSize: 12)),
                         ],
                       ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                if (_controller.modelLoadError != null)
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    margin: const EdgeInsets.only(bottom: 10),
-                    decoration: BoxDecoration(
-                      color: Colors.red.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
                     ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.error_outline, color: Colors.red, size: 18),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            _controller.modelLoadError!,
-                            style: const TextStyle(color: Colors.red, fontSize: 12),
+                  // 使用 Flexible 包裹列表，允许滚动
+                  Flexible(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: _controller.modelStates.map(
+                          (state) => _CompactModelTile(
+                            state: state,
+                            selected: state.manifest.type == _controller.selectedModel,
+                            onSelect: () => _controller.selectModel(state.manifest.type),
+                            onDownload: () => _controller.downloadModel(state.manifest.type),
+                            onDelete: () => _controller.removeModel(state.manifest.type),
                           ),
-                        ),
-                      ],
+                        ).toList(),
+                      ),
                     ),
                   ),
-                ..._controller.modelStates.map(
-                  (state) => _CompactModelTile(
-                    state: state,
-                    selected: state.manifest.type == _controller.selectedModel,
-                    onSelect: () => _controller.selectModel(state.manifest.type),
-                    onDownload: () => _controller.downloadModel(state.manifest.type),
-                    onDelete: () => _controller.removeModel(state.manifest.type),
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -131,78 +146,93 @@ class _VisionDetectionPageState extends State<VisionDetectionPage> {
       builder: (context) => AnimatedBuilder(
         animation: _controller,
         builder: (context, _) => SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 18),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('算法配置', style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 12),
-                
-                // 算法选择
-                Text('检测算法', style: Theme.of(context).textTheme.bodySmall),
-                const SizedBox(height: 6),
-                SegmentedButton<VisionAlgorithmType>(
-                  showSelectedIcon: false,
-                  segments: VisionAlgorithmType.values
-                      .map((algo) => ButtonSegment<VisionAlgorithmType>(
-                            value: algo, 
-                            label: Text(algo.label, style: const TextStyle(fontSize: 12)),
-                          ))
-                      .toList(),
-                  selected: <VisionAlgorithmType>{_controller.selectedAlgorithm},
-                  onSelectionChanged: (selection) {
-                    if (selection.isEmpty) return;
-                    _controller.selectAlgorithm(selection.first);
-                  },
-                ),
-                
-                const SizedBox(height: 16),
-                
-                // 当前算法描述
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.info_outline, 
-                           size: 18, 
-                           color: Theme.of(context).colorScheme.primary),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _controller.selectedAlgorithm.description,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Theme.of(context).colorScheme.onPrimaryContainer,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.75,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 18),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('算法配置', style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 12),
+                  // 使用 Flexible + SingleChildScrollView 支持内容滚动
+                  Flexible(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // 算法选择
+                          Text('检测算法', style: Theme.of(context).textTheme.bodySmall),
+                          const SizedBox(height: 6),
+                          SegmentedButton<VisionAlgorithmType>(
+                            showSelectedIcon: false,
+                            segments: VisionAlgorithmType.values
+                                .map((algo) => ButtonSegment<VisionAlgorithmType>(
+                                      value: algo, 
+                                      label: Text(algo.label, style: const TextStyle(fontSize: 12)),
+                                    ))
+                                .toList(),
+                            selected: <VisionAlgorithmType>{_controller.selectedAlgorithm},
+                            onSelectionChanged: (selection) {
+                              if (selection.isEmpty) return;
+                              _controller.selectAlgorithm(selection.first);
+                            },
                           ),
-                        ),
+                          
+                          const SizedBox(height: 16),
+                          
+                          // 当前算法描述
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.info_outline, 
+                                     size: 18, 
+                                     color: Theme.of(context).colorScheme.primary),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    _controller.selectedAlgorithm.description,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          
+                          const SizedBox(height: 16),
+                          
+                          // 参数配置
+                          Text('参数配置', style: Theme.of(context).textTheme.bodySmall),
+                          const SizedBox(height: 8),
+                          _AlgorithmParamsPanel(controller: _controller),
+                          
+                          const SizedBox(height: 16),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
-                ),
-                
-                const SizedBox(height: 16),
-                
-                // 参数配置
-                Text('参数配置', style: Theme.of(context).textTheme.bodySmall),
-                const SizedBox(height: 8),
-                _AlgorithmParamsPanel(controller: _controller),
-                
-                const SizedBox(height: 16),
-                
-                // 控制按钮
-                FilledButton.icon(
-                  style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(42)),
-                  onPressed: _controller.toggleStreaming,
-                  icon: Icon(_controller.isStreaming ? Icons.pause_rounded : Icons.play_arrow_rounded),
-                  label: Text(_controller.isStreaming ? '暂停识别流' : '启动识别流'),
-                ),
-              ],
+                  
+                  // 控制按钮固定在底部
+                  FilledButton.icon(
+                    style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(42)),
+                    onPressed: _controller.toggleStreaming,
+                    icon: Icon(_controller.isStreaming ? Icons.pause_rounded : Icons.play_arrow_rounded),
+                    label: Text(_controller.isStreaming ? '暂停识别流' : '启动识别流'),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -214,17 +244,23 @@ class _VisionDetectionPageState extends State<VisionDetectionPage> {
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('MQTT 地址配置', style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 12),
-              _MqttConfigRow(controller: _controller),
-            ],
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.5,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('MQTT 地址配置', style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 12),
+                _MqttConfigRow(controller: _controller),
+              ],
+            ),
           ),
         ),
       ),
@@ -235,19 +271,39 @@ class _VisionDetectionPageState extends State<VisionDetectionPage> {
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('状态与事件', style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 12),
-              ModernCard(borderRadius: BorderRadius.circular(16), child: _GravityBar(controller: _controller)),
-              const SizedBox(height: 10),
-              ModernCard(borderRadius: BorderRadius.circular(16), child: _EventBar(event: _controller.latestEvent)),
-            ],
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.6,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('状态与事件', style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 12),
+                // 使用 Flexible + SingleChildScrollView 支持内容滚动
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ModernCard(
+                          borderRadius: BorderRadius.circular(16),
+                          child: _EventBar(event: _controller.latestEvent),
+                        ),
+                        // 预留空间用于显示更多事件历史
+                        const SizedBox(height: 100),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -313,47 +369,40 @@ class _CameraWorkbench extends StatelessWidget {
         ),
         
         // 主UI层 - 使用SafeArea确保不侵入系统区域
+        // 注意：旋转由系统控制，UI始终以初始形态展示
         SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-            child: _AutoRotateByGravity(
-              turns: controller.uiRotationTurns,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // 顶部栏：返回按钮 + 标题 + 播放/暂停
-                  _buildTopBar(context),
-                  
-                  const SizedBox(height: 12),
-                  
-                  // 性能指标栏：FPS + 延迟
-                  _buildMetricsRow(),
-                  
-                  const SizedBox(height: 8),
-                  
-                  // 模型信息栏
-                  _buildModelInfoBar(),
-                  
-                  const Spacer(),
-                  
-                  // 底部区域：跌倒告警 + 快捷操作按钮
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      // 左下角：跌倒告警
-                      if (controller.fallAlarmOn)
-                        _buildFallAlarmBadge()
-                      else
-                        const SizedBox.shrink(),
-                      
-                      const Spacer(),
-                      
-                      // 右侧：快捷操作按钮组
-                      _buildQuickActionButtons(),
-                    ],
-                  ),
-                ],
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // 顶部栏：返回按钮 + 标题 + 播放/暂停
+                _buildTopBar(context),
+                
+                const SizedBox(height: 12),
+                
+                // 性能指标栏：FPS + 延迟 + 模型信息（同一行紧凑布局）
+                _buildMetricsRow(),
+                
+                const Spacer(),
+                
+                // 底部区域：跌倒告警 + 快捷操作按钮
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    // 左下角：跌倒告警
+                    if (controller.fallAlarmOn)
+                      _buildFallAlarmBadge()
+                    else
+                      const SizedBox.shrink(),
+                    
+                    const Spacer(),
+                    
+                    // 右侧：快捷操作按钮组
+                    _buildQuickActionButtons(),
+                  ],
+                ),
+              ],
             ),
           ),
         ),
@@ -418,6 +467,9 @@ class _CameraWorkbench extends StatelessWidget {
   }
 
   /// 构建性能指标行
+  /// 
+  /// 紧凑布局：FPS | 延迟 | 模型信息（右侧）
+  /// 所有 badge 使用统一的 compact 样式确保高度一致
   Widget _buildMetricsRow() {
     return Row(
       children: [
@@ -425,48 +477,24 @@ class _CameraWorkbench extends StatelessWidget {
           text: 'FPS ${controller.fps}',
           color: Colors.blueAccent,
           icon: Icons.speed,
+          compact: true,
         ),
         const SizedBox(width: 8),
         _MetricBadge(
           text: '${controller.processingLatencyMs}ms',
           color: Colors.green,
           icon: Icons.timer,
+          compact: true,
+        ),
+        const Spacer(),
+        // 模型信息放在同一行右侧
+        _MetricBadge(
+          text: '${controller.selectedModel.shortLabel} · ${controller.selectedAlgorithm.shortLabel}',
+          color: Colors.orangeAccent,
+          icon: Icons.memory,
+          compact: true,
         ),
       ],
-    );
-  }
-
-  /// 构建模型信息栏
-  Widget _buildModelInfoBar() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.orangeAccent.withValues(alpha: 0.2),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: Colors.orangeAccent.withValues(alpha: 0.5),
-          width: 1,
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.memory,
-            size: 14,
-            color: Colors.orangeAccent.withValues(alpha: 0.9),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            '${controller.selectedModel.label} · ${controller.selectedAlgorithm.label}',
-            style: TextStyle(
-              color: Colors.orangeAccent.withValues(alpha: 0.95),
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -582,94 +610,7 @@ class _AdaptiveCameraPreview extends StatelessWidget {
   }
 }
 
-/// 基于重力的自适应UI组件
-/// 
-/// 使用 RotatedBox 代替 AnimatedRotation，确保旋转后布局正确计算
-/// 避免横屏时元素旋转出屏幕外的问题
-class _AutoRotateByGravity extends StatelessWidget {
-  const _AutoRotateByGravity({
-    required this.turns,
-    required this.child,
-  });
 
-  final double turns;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    // 将 turns 转换为 quadrant (0, 1, 2, 3)
-    // 0: 0°, 1: 90°, 2: 180°, 3: 270°
-    final quadrant = ((turns % 1 + 1) % 1 * 4).round() % 4;
-    
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 250),
-      switchInCurve: Curves.easeOut,
-      switchOutCurve: Curves.easeOut,
-      transitionBuilder: (child, animation) {
-        return FadeTransition(
-          opacity: animation,
-          child: child,
-        );
-      },
-      child: _RotatedContent(
-        key: ValueKey<int>(quadrant),
-        quadrant: quadrant,
-        child: child,
-      ),
-    );
-  }
-}
-
-/// 旋转内容容器
-/// 
-/// 使用 RotatedBox 在布局阶段处理旋转，配合 OverflowBox 防止内容溢出
-class _RotatedContent extends StatelessWidget {
-  const _RotatedContent({
-    super.key,
-    required this.quadrant,
-    required this.child,
-  });
-
-  final int quadrant;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    // 使用 LayoutBuilder 获取父容器约束
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // 判断是否为横屏模式（基于可用空间）
-        final isLandscape = constraints.maxWidth > constraints.maxHeight;
-        
-        // 根据屏幕方向调整布局策略
-        if (isLandscape) {
-          // 横屏模式：使用更紧凑的布局
-          return RotatedBox(
-            quarterTurns: quadrant,
-            child: OverflowBox(
-              maxWidth: constraints.maxHeight,
-              maxHeight: constraints.maxWidth,
-              alignment: Alignment.center,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: constraints.maxHeight,
-                  maxHeight: constraints.maxWidth,
-                ),
-                child: child,
-              ),
-            ),
-          );
-        }
-        
-        // 竖屏模式：标准旋转
-        return RotatedBox(
-          quarterTurns: quadrant,
-          child: child,
-        );
-      },
-    );
-  }
-}
 
 class _QuickActionButton extends StatelessWidget {
   const _QuickActionButton({
@@ -950,34 +891,39 @@ class _MetricBadge extends StatelessWidget {
     required this.text, 
     required this.color,
     this.icon,
+    this.compact = false,
   });
 
   final String text;
   final Color color;
   final IconData? icon;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 6 : 10, 
+        vertical: compact ? 4 : 6,
+      ),
       decoration: BoxDecoration(
         color: Colors.black.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(compact ? 6 : 8),
         border: Border.all(color: color.withValues(alpha: 0.6)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[
-            Icon(icon, size: 12, color: color),
-            const SizedBox(width: 4),
+            Icon(icon, size: compact ? 10 : 12, color: color),
+            SizedBox(width: compact ? 3 : 4),
           ],
           Text(
             text,
             style: TextStyle(
               color: Colors.white, 
               fontWeight: FontWeight.w600,
-              fontSize: 12,
+              fontSize: compact ? 10 : 12,
               shadows: [
                 Shadow(
                   offset: const Offset(0, 1),
@@ -989,31 +935,6 @@ class _MetricBadge extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _GravityBar extends StatelessWidget {
-  const _GravityBar({required this.controller});
-
-  final VisionDetectionController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        const Icon(Icons.explore_rounded, color: Colors.amber),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            '重力方向: ${controller.gravitySnapshot.dominantAxis} | '
-            'g=(${controller.gravitySnapshot.x.toStringAsFixed(1)}, '
-            '${controller.gravitySnapshot.y.toStringAsFixed(1)}, '
-            '${controller.gravitySnapshot.z.toStringAsFixed(1)})',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-        ),
-      ],
     );
   }
 }
@@ -1123,34 +1044,24 @@ class _AlgorithmParamsPanelState extends State<_AlgorithmParamsPanel> {
 
   @override
   Widget build(BuildContext context) {
+    final isKeypointAlgo = widget.controller.selectedAlgorithm == VisionAlgorithmType.keypointRelation;
+    
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // 置信度阈值
+        // 关键点置信度阈值（通用）
         _ParamSlider(
-          label: '置信度阈值',
-          value: _params.confidenceThreshold,
+          label: '关键点置信度阈值',
+          value: _params.keypointConfidenceThreshold,
           min: 0.1,
-          max: 0.95,
-          onChanged: (v) => setState(() => _params = _params.copyWith(confidenceThreshold: v)),
+          max: 0.9,
+          onChanged: (v) => setState(() => _params = _params.copyWith(keypointConfidenceThreshold: v)),
           onChangeEnd: (v) => widget.controller.updateAlgorithmParams(
-            _params.copyWith(confidenceThreshold: v),
+            _params.copyWith(keypointConfidenceThreshold: v),
           ),
         ),
         
-        // 长宽比阈值
-        _ParamSlider(
-          label: '跌倒长宽比阈值',
-          value: _params.aspectRatioThreshold,
-          min: 0.8,
-          max: 2.0,
-          onChanged: (v) => setState(() => _params = _params.copyWith(aspectRatioThreshold: v)),
-          onChangeEnd: (v) => widget.controller.updateAlgorithmParams(
-            _params.copyWith(aspectRatioThreshold: v),
-          ),
-        ),
-        
-        // 时间窗口
+        // 时间窗口（通用）
         _ParamSlider(
           label: '时间窗口 (秒)',
           value: _params.timeWindowMs / 1000,
@@ -1163,18 +1074,55 @@ class _AlgorithmParamsPanelState extends State<_AlgorithmParamsPanel> {
           ),
         ),
         
-        // 重力方向检查
-        if (_params.enableGravityCheck)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Row(
-              children: [
-                const Icon(Icons.screen_rotation, size: 16, color: Colors.grey),
-                const SizedBox(width: 8),
-                Text('重力方向检测已启用', style: Theme.of(context).textTheme.bodySmall),
-              ],
+        if (isKeypointAlgo) ...[
+          // 关键点关系算法特有参数
+          _ParamSlider(
+            label: '躯干角度阈值 (°)',
+            value: _params.fallAngleThreshold,
+            min: 30.0,
+            max: 90.0,
+            divisions: 12,
+            onChanged: (v) => setState(() => _params = _params.copyWith(fallAngleThreshold: v)),
+            onChangeEnd: (v) => widget.controller.updateAlgorithmParams(
+              _params.copyWith(fallAngleThreshold: v),
             ),
           ),
+          
+          _ParamSlider(
+            label: '最小关键点数量',
+            value: _params.minKeyPoints.toDouble(),
+            min: 4.0,
+            max: 17.0,
+            divisions: 13,
+            onChanged: (v) => setState(() => _params = _params.copyWith(minKeyPoints: v.round())),
+            onChangeEnd: (v) => widget.controller.updateAlgorithmParams(
+              _params.copyWith(minKeyPoints: v.round()),
+            ),
+          ),
+        ] else ...[
+          // 识别框趋势算法特有参数
+          _ParamSlider(
+            label: '长宽比阈值',
+            value: _params.aspectRatioThreshold,
+            min: 0.5,
+            max: 2.0,
+            onChanged: (v) => setState(() => _params = _params.copyWith(aspectRatioThreshold: v)),
+            onChangeEnd: (v) => widget.controller.updateAlgorithmParams(
+              _params.copyWith(aspectRatioThreshold: v),
+            ),
+          ),
+          
+          _ParamSlider(
+            label: '垂直速度阈值 (/s)',
+            value: _params.verticalSpeedThreshold,
+            min: 0.1,
+            max: 1.0,
+            onChanged: (v) => setState(() => _params = _params.copyWith(verticalSpeedThreshold: v)),
+            onChangeEnd: (v) => widget.controller.updateAlgorithmParams(
+              _params.copyWith(verticalSpeedThreshold: v),
+            ),
+          ),
+        ],
       ],
     );
   }

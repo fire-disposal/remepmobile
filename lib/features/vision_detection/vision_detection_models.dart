@@ -9,86 +9,82 @@ enum VisionEventLevel {
 }
 
 /// 算法参数配置
+/// 
+/// 支持两种算法：
+/// 1. 关键点关系分析 - 基于17个关键点的空间关系判断跌倒
+/// 2. 识别框趋势分析 - 基于检测框的时序变化判断跌倒
 class AlgorithmParams {
-  /// 置信度阈值
-  final double confidenceThreshold;
+  /// 关键点置信度阈值
+  final double keypointConfidenceThreshold;
   
   /// 时间窗口（毫秒）
   final int timeWindowMs;
   
-  /// 长宽比阈值（用于跌倒检测）
+  /// 跌倒检测阈值（关键点角度阈值，单位：度）
+  final double fallAngleThreshold;
+  
+  /// 识别框长宽比阈值（宽/高）
   final double aspectRatioThreshold;
   
-  /// 时序变化阈值
-  final double trendThreshold;
+  /// 垂直速度阈值（每秒变化的屏幕比例）
+  final double verticalSpeedThreshold;
   
-  /// 垂直位置变化阈值
-  final double positionDropThreshold;
-  
-  /// 是否启用重力方向检查
-  final bool enableGravityCheck;
+  /// 需要检测的关键点最小数量
+  final int minKeyPoints;
 
   const AlgorithmParams({
-    required this.confidenceThreshold,
+    required this.keypointConfidenceThreshold,
     required this.timeWindowMs,
+    required this.fallAngleThreshold,
     required this.aspectRatioThreshold,
-    required this.trendThreshold,
-    required this.positionDropThreshold,
-    this.enableGravityCheck = true,
+    required this.verticalSpeedThreshold,
+    required this.minKeyPoints,
   });
 
   /// 创建默认参数
   factory AlgorithmParams.defaultFor(VisionAlgorithmType algorithm) {
     return switch (algorithm) {
-      VisionAlgorithmType.fallRuleV1 => const AlgorithmParams(
-          confidenceThreshold: 0.5,
-          timeWindowMs: 2000,
-          aspectRatioThreshold: 1.1,
-          trendThreshold: 0.35,
-          positionDropThreshold: 0.08,
-          enableGravityCheck: true,
-        ),
-      VisionAlgorithmType.motionTrend => const AlgorithmParams(
-          confidenceThreshold: 0.4,
+      VisionAlgorithmType.keypointRelation => const AlgorithmParams(
+          keypointConfidenceThreshold: 0.3,
           timeWindowMs: 1500,
-          aspectRatioThreshold: 1.0,
-          trendThreshold: 0.3,
-          positionDropThreshold: 0.05,
-          enableGravityCheck: false,
+          fallAngleThreshold: 60.0,  // 躯干角度超过60度认为可能跌倒
+          aspectRatioThreshold: 1.2,
+          verticalSpeedThreshold: 0.3,
+          minKeyPoints: 8,  // 至少需要8个有效关键点
         ),
-      VisionAlgorithmType.hybridScore => const AlgorithmParams(
-          confidenceThreshold: 0.45,
-          timeWindowMs: 1800,
-          aspectRatioThreshold: 1.05,
-          trendThreshold: 0.25,
-          positionDropThreshold: 0.06,
-          enableGravityCheck: true,
+      VisionAlgorithmType.bboxTrend => const AlgorithmParams(
+          keypointConfidenceThreshold: 0.3,
+          timeWindowMs: 2000,
+          fallAngleThreshold: 70.0,
+          aspectRatioThreshold: 1.0,  // 框变扁认为跌倒
+          verticalSpeedThreshold: 0.4,  // 快速下降
+          minKeyPoints: 5,
         ),
     };
   }
 
   /// 复制并修改参数
   AlgorithmParams copyWith({
-    double? confidenceThreshold,
+    double? keypointConfidenceThreshold,
     int? timeWindowMs,
+    double? fallAngleThreshold,
     double? aspectRatioThreshold,
-    double? trendThreshold,
-    double? positionDropThreshold,
-    bool? enableGravityCheck,
+    double? verticalSpeedThreshold,
+    int? minKeyPoints,
   }) {
     return AlgorithmParams(
-      confidenceThreshold: confidenceThreshold ?? this.confidenceThreshold,
+      keypointConfidenceThreshold: keypointConfidenceThreshold ?? this.keypointConfidenceThreshold,
       timeWindowMs: timeWindowMs ?? this.timeWindowMs,
+      fallAngleThreshold: fallAngleThreshold ?? this.fallAngleThreshold,
       aspectRatioThreshold: aspectRatioThreshold ?? this.aspectRatioThreshold,
-      trendThreshold: trendThreshold ?? this.trendThreshold,
-      positionDropThreshold: positionDropThreshold ?? this.positionDropThreshold,
-      enableGravityCheck: enableGravityCheck ?? this.enableGravityCheck,
+      verticalSpeedThreshold: verticalSpeedThreshold ?? this.verticalSpeedThreshold,
+      minKeyPoints: minKeyPoints ?? this.minKeyPoints,
     );
   }
 }
 
 enum VisionModelType {
-  builtinPersonFast('内置 Fast Person', '内置轻量人体框模型，无需下载，低延迟', Colors.lightBlue),
+  builtinPersonFast('MoveNet (内置)', '内置轻量姿态模型，17个关键点，无需下载', Colors.lightBlue),
   poseNano('MoveNet Lightning', 'Google官方轻量姿态模型，17个关键点', Colors.teal),
   personDetectorLite('BlazePose', 'Google MediaPipe人体检测', Colors.orange),
   bodyKeypointLite('EfficientDet', '轻量级目标检测模型', Colors.purple);
@@ -98,17 +94,30 @@ enum VisionModelType {
   final Color accent;
 
   const VisionModelType(this.label, this.description, this.accent);
+
+  /// 简短标签，用于紧凑显示
+  String get shortLabel => switch (this) {
+    VisionModelType.builtinPersonFast => '内置',
+    VisionModelType.poseNano => 'MoveNet',
+    VisionModelType.personDetectorLite => 'BlazePose',
+    VisionModelType.bodyKeypointLite => 'EffDet',
+  };
 }
 
 enum VisionAlgorithmType {
-  fallRuleV1('Fall Rule V1', '重力方向 + 框长宽比 + 时序变化'),
-  motionTrend('Motion Trend', '框高宽比时序变化'),
-  hybridScore('Hybrid Score', '融合重力方向与视觉分数');
+  keypointRelation('关键点关系', '基于17个关键点空间关系判断跌倒姿态'),
+  bboxTrend('识别框趋势', '基于检测框长宽比和垂直速度变化判断');
 
   final String label;
   final String description;
 
   const VisionAlgorithmType(this.label, this.description);
+
+  /// 简短标签，用于紧凑显示
+  String get shortLabel => switch (this) {
+    VisionAlgorithmType.keypointRelation => 'KeyRel',
+    VisionAlgorithmType.bboxTrend => 'BBox',
+  };
 }
 
 enum VisionPermissionState {
