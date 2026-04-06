@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:mqtt_client/mqtt_client.dart';
 import 'package:mqtt_client/mqtt_server_client.dart';
 
-import '../../features/mqtt_debug/data/models/mqtt_models.dart';
+authimport 'mqtt_models.dart';
 import '../errors/exceptions.dart';
 
 /// MQTT连接状态

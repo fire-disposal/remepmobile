@@ -1,125 +1,156 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/widgets/widgets.dart';
 
 class DashboardPage extends StatelessWidget {
   const DashboardPage({super.key});
 
+  static const _modules = [
+    _ModuleItem(
+      title: 'IMU 监测',
+      icon: Icons.accessibility_new_rounded,
+      color: Colors.deepPurple,
+      route: '/app/imu',
+      description: '动态 IMU 数据与跌倒行为识别',
+    ),
+    _ModuleItem(
+      title: '视觉跌倒检查',
+      icon: Icons.camera_enhance_rounded,
+      color: Colors.pinkAccent,
+      route: '/app/vision',
+      description: '通过边缘计算模型进行视觉动作捕捉',
+    ),
+    _ModuleItem(
+      title: '蓝牙调试工具',
+      icon: Icons.bluetooth_audio_rounded,
+      color: Colors.blueAccent,
+      route: '/app/debug/bluetooth',
+      description: '探测周边 BLE 设备并进行信号调试',
+    ),
+  ];
+
   @override
   Widget build(BuildContext context) {
-    final modules = [
-      const _ModuleCardData(
-        title: 'MQTT 数据模拟',
-        subtitle: '本地模拟主题发布、频率与载荷数据。',
-        route: '/app/mqtt-simulator',
-        icon: Icons.hub_outlined,
-      ),
-      const _ModuleCardData(
-        title: '视觉跌倒检测',
-        subtitle: '本地摄像头检测流程与事件演练。',
-        route: '/app/vision-fall-detection',
-        icon: Icons.videocam_outlined,
-      ),
-      const _ModuleCardData(
-        title: 'IMU 跌倒检测',
-        subtitle: '基于惯导参数阈值的本地检测调试。',
-        route: '/app/imu-fall-detection',
-        icon: Icons.sensors_outlined,
-      ),
-      const _ModuleCardData(
-        title: '蓝牙数据接收调试',
-        subtitle: '模拟蓝牙数据流接收、解析和观察。',
-        route: '/app/bluetooth-debug',
-        icon: Icons.bluetooth_searching_outlined,
-      ),
-    ];
-
     return Scaffold(
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
-        title: const Text('本地测试工作台'),
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: false,
+        title: const Text(
+          'ReMep 工作台',
+          style: TextStyle(fontWeight: FontWeight.w900, fontSize: 22),
+        ),
+        actions: [
+          IconButton(
+            onPressed: () => context.push('/app/settings'),
+            icon: const Icon(Icons.settings_outlined),
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final crossAxisCount = constraints.maxWidth > 1180
-              ? 3
-              : constraints.maxWidth > 760
-                  ? 2
-                  : 1;
-
-          return Padding(
-            padding: const EdgeInsets.all(20),
-            child: GridView.builder(
-              itemCount: modules.length,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: crossAxisCount,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                childAspectRatio: 1.55,
+      body: CustomScrollView(
+        physics: const BouncingScrollPhysics(),
+        slivers: [
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) => _WaterfallCard(item: _modules[index]),
+                childCount: _modules.length,
               ),
-              itemBuilder: (_, index) {
-                final item = modules[index];
-                return InkWell(
-                  borderRadius: BorderRadius.circular(16),
-                  onTap: () => context.push(item.route),
-                  child: Card(
-                    elevation: 1,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          CircleAvatar(
-                            radius: 18,
-                            child: Icon(item.icon),
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            item.title,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(fontWeight: FontWeight.w600),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            item.subtitle,
-                            style: Theme.of(context).textTheme.bodyMedium,
-                          ),
-                          const Spacer(),
-                          Text(
-                            '进入模块 →',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
-                                ?.copyWith(fontWeight: FontWeight.w600),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              },
             ),
-          );
-        },
+          ),
+        ],
       ),
     );
   }
 }
 
-class _ModuleCardData {
-  const _ModuleCardData({
-    required this.title,
-    required this.subtitle,
-    required this.route,
-    required this.icon,
-  });
-
+class _ModuleItem {
   final String title;
-  final String subtitle;
-  final String route;
   final IconData icon;
+  final Color color;
+  final String route;
+  final String description;
+
+  const _ModuleItem({
+    required this.title,
+    required this.icon,
+    required this.color,
+    required this.route,
+    required this.description,
+  });
+}
+
+class _WaterfallCard extends StatelessWidget {
+  final _ModuleItem item;
+  const _WaterfallCard({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
+    // 优化：将颜色计算移出 build 或提前确定核心样式，避免频繁 color.withValues
+    final iconBgColor = item.color.withValues(alpha: 0.08);
+    final descriptionColor = theme.textTheme.bodySmall?.color?.withValues(alpha: 0.6);
+    final arrowColor = theme.dividerColor.withValues(alpha: 0.5);
+
+    return RepaintBoundary(
+      child: ModernCard(
+        margin: const EdgeInsets.only(bottom: 20),
+        padding: EdgeInsets.zero, // 使用 ModernCard 内部 InkWell 后的 Padding
+        borderRadius: BorderRadius.circular(24),
+        onTap: () => context.push(item.route),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: iconBgColor,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Icon(item.icon, color: item.color, size: 32),
+              ),
+              const SizedBox(width: 20),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.title,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      item.description,
+                      style: TextStyle(
+                        color: descriptionColor,
+                        fontSize: 14,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.arrow_forward_ios_rounded,
+                color: arrowColor,
+                size: 18,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

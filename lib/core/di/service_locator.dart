@@ -1,21 +1,35 @@
-import 'package:get_it/get_it.dart';
-
+﻿import 'package:get_it/get_it.dart';
+import '../../features/settings/settings_module.dart';
 import '../bluetooth/bluetooth_service.dart';
 import '../mqtt/mqtt_service.dart';
-import '../services/permission_service.dart';
+import '../permission/permission_service.dart';
 import '../storage/cache_service.dart';
+import '../storage/secure_storage_service.dart';
 import '../theme/theme_notifier.dart';
 
 final getIt = GetIt.instance;
 
-/// 注册本地调试模式所需的基础设施层。
-///
-/// 当前应用不依赖远端后端、鉴权和拦截器，仅保留本地可用的
-/// MQTT / 蓝牙 / 存储 / 权限基础能力，方便后续模块接入。
-void setupServiceLocator() {
-  getIt.registerSingleton<CacheStorageService>(CacheStorageService());
-  getIt.registerSingleton<MqttService>(MqttService());
-  getIt.registerSingleton<BluetoothService>(BluetoothService());
-  getIt.registerSingleton<PermissionService>(PermissionService());
+/// 异步初始化核心基础设施，确保线程安全且不阻塞 UI 绘制。
+Future<void> setupServiceLocator() async {
+  // 1. 注册基础存储服务（需优先初始化）
+  final cacheService = CacheStorageService();
+  await cacheService.init();
+  getIt.registerSingleton<CacheStorageService>(cacheService);
+
+  // 1.1 注册安全存储服务
+  getIt.registerSingleton<SecureStorageService>(SecureStorageService());
+
+  // 2. 注册其他异步或长耗时服务
+  getIt.registerLazySingleton<MqttService>(() => MqttService());
+  getIt.registerLazySingleton<BluetoothService>(() => BluetoothService());
+  getIt.registerLazySingleton<PermissionService>(() => PermissionService());
+  
+  // 3. 注册依赖于存储的状态通知器
   getIt.registerSingleton<ThemeModeNotifier>(ThemeModeNotifier(getIt<CacheStorageService>()));
+  
+  // 4. 注册业务功能模块的依赖项 (Feature DI)
+  SettingsModule.registerDependencies(getIt);
+  
+  // 等待所有异步单例就绪（如果有使用 registerSingletonAsync）
+  await getIt.allReady();
 }

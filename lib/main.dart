@@ -1,18 +1,21 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import 'core/di/service_locator.dart';
 import 'core/navigation/app_router.dart';
-import 'core/storage/cache_service.dart';
 import 'core/theme/app_theme.dart';
+import 'core/theme/theme_notifier.dart';
 
 void main() async {
+  // 确保 Flutter 绑定初始化（必须作为首行）
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 初始化 Hive 缓存
-  await CacheStorageService().init();
-
-  // 初始化依赖注入
-  setupServiceLocator();
+  try {
+    // 异步初始化所有核心依赖，且在 runApp 前确保资源就绪。
+    // 这有助于减少初次访问 UI 时的卡顿感（Lazy loading 策略）。
+    await setupServiceLocator();
+  } catch (e) {
+    debugPrint('基础设施初始化失败: $e');
+  }
 
   runApp(const AppWidget());
 }
@@ -23,13 +26,19 @@ class AppWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp.router(
-      title: 'ReMep 移动健康',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
-      themeMode: ThemeMode.system,
-      routerConfig: appRouter,
+    return ListenableBuilder(
+      listenable: getIt<ThemeModeNotifier>(),
+      builder: (context, _) {
+        final themeNotifier = getIt<ThemeModeNotifier>();
+        return MaterialApp.router(
+          title: 'ReMep 移动健康',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.lightTheme,
+          darkTheme: AppTheme.darkTheme,
+          themeMode: themeNotifier.flutterThemeMode,
+          routerConfig: appRouter,
+        );
+      },
     );
   }
 }

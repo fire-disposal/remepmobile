@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../features/local_lab/presentation/pages/bluetooth_debug_page.dart';
-import '../../features/local_lab/presentation/pages/imu_fall_detection_page.dart';
-import '../../features/local_lab/presentation/pages/mqtt_simulator_page.dart';
-import '../../features/local_lab/presentation/pages/vision_fall_detection_page.dart';
+import '../../features/settings/settings_module.dart';
 import '../../pages/home/dashboard_page.dart';
 import '../../pages/launch_page.dart';
+import '../../features/imu_monitoring/imu_monitoring_page.dart';
+import '../../features/vision_detection/vision_detection_page.dart';
+import '../../features/debug/bluetooth_debug_page.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -23,20 +23,18 @@ final appRouter = GoRouter(
       builder: (context, state) => const DashboardPage(),
     ),
     GoRoute(
-      path: '/app/mqtt-simulator',
-      builder: (context, state) => const MqttSimulatorPage(),
+      path: '/app/imu',
+      builder: (context, state) => const ImuMonitoringPage(),
     ),
     GoRoute(
-      path: '/app/vision-fall-detection',
-      builder: (context, state) => const VisionFallDetectionPage(),
+      path: '/app/vision',
+      builder: (context, state) => const VisionDetectionPage(),
     ),
     GoRoute(
-      path: '/app/imu-fall-detection',
-      builder: (context, state) => const ImuFallDetectionPage(),
-    ),
-    GoRoute(
-      path: '/app/bluetooth-debug',
+      path: '/app/debug/bluetooth',
       builder: (context, state) => const BluetoothDebugPage(),
     ),
+    // 注入各业务模块定义的路由
+    ...SettingsModule.routes,
   ],
 );

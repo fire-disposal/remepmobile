@@ -1,9 +1,9 @@
 import 'package:dio/dio.dart';
 import 'package:pretty_dio_logger/pretty_dio_logger.dart';
 
-import '../api/auth/auth_token_provider.dart';
-import '../api/config/api_client_config.dart';
-import '../api/http/api_request_auth.dart';
+import '../auth/auth_token_provider.dart';
+import 'api_client_config.dart';
+import 'api_request_auth.dart';
 import '../constants/env_constants.dart';
 import 'interceptors/auth_interceptor.dart';
 import 'interceptors/error_interceptor.dart';

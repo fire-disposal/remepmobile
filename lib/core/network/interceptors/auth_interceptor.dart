@@ -1,9 +1,9 @@
 import 'package:dio/dio.dart';
 
-import '../../api/auth/auth_token_provider.dart';
-import '../../api/auth/storage_auth_token_provider.dart';
-import '../../api/http/api_request_auth.dart';
-import '../../storage/secure_storage_service.dart';
+import '../../auth/auth_token_provider.dart';
+import '../../auth/storage_auth_token_provider.dart';
+import '../api_request_auth.dart';
+import '../../../core/storage/secure_storage_service.dart';
 
 /// 认证拦截器
 class AuthInterceptor extends Interceptor {
@@ -25,7 +25,7 @@ class AuthInterceptor extends Interceptor {
     }
 
     // 鉴权接口才注入 Token。
-    final token = await _tokenProvider.getToken();
+    final token = await _tokenProvider.getAccessToken();
     if (token != null && token.isNotEmpty) {
       options.headers['Authorization'] = 'Bearer $token';
     }

@@ -24,15 +24,29 @@ class ModernCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cardTheme = theme.cardTheme;
+    final shape = cardTheme.shape as RoundedRectangleBorder;
+    
+    final effectiveBorderRadius = (borderRadius != null && borderRadius is BorderRadius) 
+        ? (borderRadius as BorderRadius) 
+        : (shape.borderRadius as BorderRadius);
+
     return Container(
       margin: margin ?? const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: color ?? cardTheme.color,
+        borderRadius: effectiveBorderRadius,
+        border: shape.side != BorderSide.none 
+            ? Border.fromBorderSide(shape.side)
+            : null,
+      ),
       child: Material(
-        color: color ?? Theme.of(context).colorScheme.surface,
-        elevation: elevation ?? 0,
-        borderRadius: borderRadius ?? BorderRadius.circular(16),
+        color: Colors.transparent,
+        borderRadius: effectiveBorderRadius,
         child: InkWell(
           onTap: onTap,
-          borderRadius: borderRadius ?? BorderRadius.circular(16),
+          borderRadius: effectiveBorderRadius,
           child: Container(
             padding: padding ?? const EdgeInsets.all(16),
             child: child,

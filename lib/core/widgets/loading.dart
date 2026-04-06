@@ -65,38 +65,53 @@ class _LoadingWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    
     return GestureDetector(
       onTap: onDismiss,
       child: Material(
-        color: Colors.black.withValues(alpha: 0.5),
+        color: Colors.black.withValues(alpha: 0.4), // 略微调浅背景遮罩
         child: Center(
           child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 32),
-            padding: const EdgeInsets.all(24),
+            margin: const EdgeInsets.symmetric(horizontal: 48),
+            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-              borderRadius: BorderRadius.circular(16),
+              color: colorScheme.surfaceContainerHigh,
+              borderRadius: BorderRadius.circular(28), // 遵循 M3 容器圆角
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.1),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                ),
+              ],
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const CircularProgressIndicator()
-                    .animate()
+                CircularProgressIndicator(
+                  strokeWidth: 3,
+                  color: colorScheme.primary,
+                ).animate()
                     .fadeIn(duration: 200.ms)
                     .scale(begin: const Offset(0.8, 0.8)),
                 if (message != null) ...[
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 20),
                   Text(
                     message!,
-                    style: Theme.of(context).textTheme.bodyMedium,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w500,
+                      color: colorScheme.onSurface,
+                    ),
                     textAlign: TextAlign.center,
                   ).animate().fadeIn(delay: 100.ms),
                 ],
               ],
             ),
           ).animate().fadeIn(duration: 200.ms).scale(
-                begin: const Offset(0.9, 0.9),
-                curve: Curves.easeOut,
+                begin: const Offset(0.95, 0.95),
+                curve: Curves.easeOutBack,
               ),
         ),
       ),

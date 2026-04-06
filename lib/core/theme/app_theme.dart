@@ -9,37 +9,37 @@ class AppTheme {
 
   /// 浅色主题
   static ThemeData get lightTheme {
+    final colorScheme = ColorScheme.fromSeed(
+      seedColor: AppColors.primary,
+      brightness: Brightness.light,
+    );
+    
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: AppColors.primary,
-        brightness: Brightness.light,
-        primary: AppColors.primary,
-        secondary: AppColors.secondary,
-        tertiary: AppColors.tertiary,
-        error: AppColors.error,
-        surface: AppColors.surface,
-      ),
+      colorScheme: colorScheme,
       textTheme: _buildTextTheme(Brightness.light),
       appBarTheme: AppBarTheme(
         elevation: 0,
-        centerTitle: true,
-        backgroundColor: AppColors.surface,
-        foregroundColor: AppColors.onSurface,
-        titleTextStyle: GoogleFonts.roboto(
+        centerTitle: false,
+        backgroundColor: colorScheme.surface,
+        surfaceTintColor: Colors.transparent,
+        foregroundColor: colorScheme.onSurface,
+        titleTextStyle: GoogleFonts.plusJakartaSans(
           fontSize: 20,
-          fontWeight: FontWeight.w500,
-          color: AppColors.onSurface,
+          fontWeight: FontWeight.bold,
+          color: colorScheme.onSurface,
         ),
       ),
       cardTheme: CardThemeData(
-        elevation: 2,
+        elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(24),
+          side: BorderSide(color: colorScheme.outlineVariant.withValues(alpha: 0.5), width: 1),
         ),
-        color: AppColors.surface,
+        color: colorScheme.surfaceContainerLow,
       ),
+      scaffoldBackgroundColor: colorScheme.surface,
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           elevation: 0,
@@ -109,43 +109,42 @@ class AppTheme {
         color: AppColors.divider,
         thickness: 1,
       ),
-      scaffoldBackgroundColor: AppColors.surfaceVariant,
     );
   }
 
   /// 深色主题
   static ThemeData get darkTheme {
+    final colorScheme = ColorScheme.fromSeed(
+      seedColor: AppColors.primary,
+      brightness: Brightness.dark,
+    );
+
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: AppColorsDark.primary,
-        brightness: Brightness.dark,
-        primary: AppColorsDark.primary,
-        secondary: AppColorsDark.secondary,
-        tertiary: AppColorsDark.tertiary,
-        error: AppColorsDark.error,
-        surface: AppColorsDark.surface,
-      ),
+      colorScheme: colorScheme,
       textTheme: _buildTextTheme(Brightness.dark),
       appBarTheme: AppBarTheme(
         elevation: 0,
-        centerTitle: true,
-        backgroundColor: AppColorsDark.surface,
-        foregroundColor: AppColorsDark.onSurface,
-        titleTextStyle: GoogleFonts.roboto(
+        centerTitle: false,
+        backgroundColor: colorScheme.surface,
+        surfaceTintColor: Colors.transparent,
+        foregroundColor: colorScheme.onSurface,
+        titleTextStyle: GoogleFonts.plusJakartaSans(
           fontSize: 20,
-          fontWeight: FontWeight.w500,
-          color: AppColorsDark.onSurface,
+          fontWeight: FontWeight.bold,
+          color: colorScheme.onSurface,
         ),
       ),
       cardTheme: CardThemeData(
-        elevation: 2,
+        elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(24),
+          side: BorderSide(color: colorScheme.outlineVariant.withValues(alpha: 0.2), width: 1),
         ),
-        color: AppColorsDark.surfaceVariant,
+        color: colorScheme.surfaceContainerHigh,
       ),
+      scaffoldBackgroundColor: colorScheme.surface,
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           elevation: 0,
@@ -215,7 +214,6 @@ class AppTheme {
         color: AppColorsDark.divider,
         thickness: 1,
       ),
-      scaffoldBackgroundColor: AppColorsDark.surface,
     );
   }
 

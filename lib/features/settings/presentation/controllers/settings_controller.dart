@@ -1,38 +1,31 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/permission/permission_service.dart';
 import '../../../../core/storage/cache_service.dart';
 import '../../../../core/storage/secure_storage_service.dart';
 import '../../../../core/theme/theme_notifier.dart';
 
 /// 设置状态
 class SettingsState {
-  final bool isNotificationEnabled;
-  final bool isEmailNotificationEnabled;
   final AppThemeMode themeMode;
-  final String? userName;
-  final String? userEmail;
+  final Map<AppPermission, AppPermissionStatus> permissions;
+  final bool isLoading;
 
   const SettingsState({
-    this.isNotificationEnabled = true,
-    this.isEmailNotificationEnabled = false,
     this.themeMode = AppThemeMode.system,
-    this.userName,
-    this.userEmail,
+    this.permissions = const {},
+    this.isLoading = false,
   });
 
   SettingsState copyWith({
-    bool? isNotificationEnabled,
-    bool? isEmailNotificationEnabled,
     AppThemeMode? themeMode,
-    String? userName,
-    String? userEmail,
+    Map<AppPermission, AppPermissionStatus>? permissions,
+    bool? isLoading,
   }) {
     return SettingsState(
-      isNotificationEnabled: isNotificationEnabled ?? this.isNotificationEnabled,
-      isEmailNotificationEnabled: isEmailNotificationEnabled ?? this.isEmailNotificationEnabled,
       themeMode: themeMode ?? this.themeMode,
-      userName: userName ?? this.userName,
-      userEmail: userEmail ?? this.userEmail,
+      permissions: permissions ?? this.permissions,
+      isLoading: isLoading ?? this.isLoading,
     );
   }
 }
@@ -42,6 +35,7 @@ class SettingsController extends ChangeNotifier {
   final ThemeModeNotifier _themeModeNotifier;
   final CacheStorageService _cacheStorage;
   final SecureStorageService _secureStorage;
+  final PermissionService _permissionService;
 
   SettingsState _state = const SettingsState();
   SettingsState get state => _state;
@@ -50,14 +44,39 @@ class SettingsController extends ChangeNotifier {
     this._themeModeNotifier,
     this._cacheStorage,
     this._secureStorage,
+    this._permissionService,
   ) {
     _init();
   }
 
-  void _init() {
+  Future<void> _init() async {
     _state = _state.copyWith(
       themeMode: _themeModeNotifier.mode,
+      isLoading: true,
     );
+    notifyListeners();
+    await refreshPermissions();
+  }
+
+  /// 刷新所有权限状态
+  Future<void> refreshPermissions() async {
+    final permissions = await _permissionService.checkPermissions(AppPermission.values);
+    _state = _state.copyWith(
+      permissions: permissions,
+      isLoading: false,
+    );
+    notifyListeners();
+  }
+
+  /// 请求特定权限
+  Future<void> requestPermission(AppPermission permission) async {
+    await _permissionService.requestPermission(permission);
+    await refreshPermissions();
+  }
+
+  /// 打开系统设置
+  Future<void> openAppSettings() async {
+    await _permissionService.openSettings();
   }
 
   /// 设置主题模式
@@ -67,28 +86,11 @@ class SettingsController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 切换通知开关
-  void toggleNotification(bool value) {
-    _state = _state.copyWith(isNotificationEnabled: value);
-    notifyListeners();
-  }
-
-  /// 切换邮件通知开关
-  void toggleEmailNotification(bool value) {
-    _state = _state.copyWith(isEmailNotificationEnabled: value);
-    notifyListeners();
-  }
-
-  /// 退出登录
-  Future<void> logout() async {
+  /// 清除本地存储
+  Future<void> clearAllData() async {
     await _secureStorage.deleteAll();
     await _cacheStorage.deleteAll();
-    _state = const SettingsState();
+    _state = _state.copyWith(themeMode: AppThemeMode.system);
     notifyListeners();
-  }
-
-  /// 清除缓存
-  Future<void> clearCache() async {
-    await _cacheStorage.deleteAll();
   }
 }

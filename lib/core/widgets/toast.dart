@@ -114,10 +114,17 @@ class _ToastWidgetState extends State<_ToastWidget>
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    
+    // M3 风格配置
+    final bgColor = _getM3BackgroundColor(colorScheme);
+    final foregroundColor = _getM3ForegroundColor(colorScheme);
+
     return Positioned(
       top: MediaQuery.of(context).padding.top + 16,
-      left: 16,
-      right: 16,
+      left: 24,
+      right: 24,
       child: SlideTransition(
         position: _slideAnimation,
         child: FadeTransition(
@@ -125,15 +132,15 @@ class _ToastWidgetState extends State<_ToastWidget>
           child: Material(
             color: Colors.transparent,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               decoration: BoxDecoration(
-                color: _getBackgroundColor(),
-                borderRadius: BorderRadius.circular(12),
+                color: bgColor,
+                borderRadius: BorderRadius.circular(16), // M3 较小的容器圆角
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.1),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
+                    color: Colors.black.withValues(alpha: 0.08),
+                    blurRadius: 15,
+                    offset: const Offset(0, 8),
                   ),
                 ],
               ),
@@ -141,17 +148,17 @@ class _ToastWidgetState extends State<_ToastWidget>
                 children: [
                   Icon(
                     _getIcon(),
-                    color: _getIconColor(),
-                    size: 24,
+                    color: foregroundColor,
+                    size: 22,
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
                       widget.message,
-                      style: TextStyle(
-                        color: _getTextColor(),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: foregroundColor,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.2,
                       ),
                     ),
                   ),
@@ -164,16 +171,30 @@ class _ToastWidgetState extends State<_ToastWidget>
     );
   }
 
-  Color _getBackgroundColor() {
+  Color _getM3BackgroundColor(ColorScheme colorScheme) {
     switch (widget.type) {
       case ToastType.info:
-        return const Color(0xFF2196F3);
+        return colorScheme.secondaryContainer;
       case ToastType.success:
-        return const Color(0xFF4CAF50);
+        // M3 没有直接的 Success 容器，通常使用绿色调或自定义扩展
+        return const Color(0xFFE8F5E9); // 浅绿
       case ToastType.warning:
-        return const Color(0xFFFF9800);
+        return const Color(0xFFFFF3E0); // 浅橙
       case ToastType.error:
-        return const Color(0xFFE53935);
+        return colorScheme.errorContainer;
+    }
+  }
+
+  Color _getM3ForegroundColor(ColorScheme colorScheme) {
+    switch (widget.type) {
+      case ToastType.info:
+        return colorScheme.onSecondaryContainer;
+      case ToastType.success:
+        return const Color(0xFF2E7D32); // 深绿
+      case ToastType.warning:
+        return const Color(0xFFE65100); // 深橙
+      case ToastType.error:
+        return colorScheme.onErrorContainer;
     }
   }
 
