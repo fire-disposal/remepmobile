@@ -3,9 +3,10 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 enum VisionModelType {
-  poseTiny('Pose Tiny', '轻量骨架检测，低延迟', Colors.lightBlue),
-  personDetector('Person Detector', '通用人体框检测，兼容性高', Colors.orange),
-  bodyKeypoint('Body Keypoint XL', '精度更高，耗时更长', Colors.purple);
+  builtinPersonFast('内置 Fast Person', '内置轻量人体框模型，无需下载，低延迟', Colors.lightBlue),
+  poseNano('Pose Nano', '超轻量姿态模型，适合中低端设备', Colors.teal),
+  personDetectorLite('Person Detector Lite', '检测精度更稳定，下载后可离线推理', Colors.orange),
+  bodyKeypointLite('Body Keypoint Lite', '带关键点能力的轻量模型', Colors.purple);
 
   final String label;
   final String description;
@@ -15,7 +16,7 @@ enum VisionModelType {
 }
 
 enum VisionAlgorithmType {
-  fallRuleV1('Fall Rule V1', '阈值 + 时间窗规则'),
+  fallRuleV1('Fall Rule V1', '重力方向 + 框长宽比 + 时序变化'),
   motionTrend('Motion Trend', '框高宽比时序变化'),
   hybridScore('Hybrid Score', '融合重力方向与视觉分数');
 
@@ -23,6 +24,13 @@ enum VisionAlgorithmType {
   final String description;
 
   const VisionAlgorithmType(this.label, this.description);
+}
+
+enum VisionPermissionState {
+  unknown,
+  granted,
+  denied,
+  permanentlyDenied,
 }
 
 class DetectionBox {
@@ -71,5 +79,48 @@ class GravitySnapshot {
     };
     final axis = values.entries.reduce((a, b) => a.value >= b.value ? a : b);
     return axis.key;
+  }
+}
+
+class ModelManifest {
+  final VisionModelType type;
+  final String fileName;
+  final String downloadUrl;
+  final String sizeLabel;
+  final bool builtIn;
+
+  const ModelManifest({
+    required this.type,
+    required this.fileName,
+    required this.downloadUrl,
+    required this.sizeLabel,
+    this.builtIn = false,
+  });
+}
+
+class ModelRuntimeState {
+  final ModelManifest manifest;
+  final bool isDownloaded;
+  final bool isDownloading;
+  final double progress;
+
+  const ModelRuntimeState({
+    required this.manifest,
+    this.isDownloaded = false,
+    this.isDownloading = false,
+    this.progress = 0,
+  });
+
+  ModelRuntimeState copyWith({
+    bool? isDownloaded,
+    bool? isDownloading,
+    double? progress,
+  }) {
+    return ModelRuntimeState(
+      manifest: manifest,
+      isDownloaded: isDownloaded ?? this.isDownloaded,
+      isDownloading: isDownloading ?? this.isDownloading,
+      progress: progress ?? this.progress,
+    );
   }
 }

@@ -45,7 +45,7 @@ class _VisionDetectionPageState extends State<VisionDetectionPage> {
                   child: _CameraPanel(controller: _controller),
                 ),
                 Expanded(
-                  flex: 5,
+                  flex: 7,
                   child: _ControlPanel(controller: _controller),
                 ),
               ],
@@ -64,6 +64,10 @@ class _CameraPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (controller.permissionState != VisionPermissionState.granted) {
+      return _PermissionBlock(controller: controller);
+    }
+
     final camera = controller.cameraController;
     final canPreview = camera?.value.isInitialized ?? false;
 
@@ -100,6 +104,69 @@ class _CameraPanel extends StatelessWidget {
                 color: Colors.green,
               ),
             ),
+            if (controller.fallAlarmOn)
+              Positioned(
+                left: 12,
+                bottom: 12,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: 0.9),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Text(
+                    '跌倒告警中',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PermissionBlock extends StatelessWidget {
+  const _PermissionBlock({required this.controller});
+
+  final VisionDetectionController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final isPermanent = controller.permissionState == VisionPermissionState.permanentlyDenied;
+
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: ModernCard(
+        borderRadius: BorderRadius.circular(20),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.privacy_tip_outlined, size: 42),
+            const SizedBox(height: 12),
+            Text(
+              isPermanent ? '权限被永久拒绝' : '需要摄像头与运动传感器权限',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            const Text('可在系统设置页面统一管理权限；检测页内也支持快速授权与跳转设置。'),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 8,
+              children: [
+                FilledButton.icon(
+                  onPressed: controller.requestPermissions,
+                  icon: const Icon(Icons.check_circle_outline),
+                  label: const Text('请求权限'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: controller.openSystemSettings,
+                  icon: const Icon(Icons.settings),
+                  label: const Text('打开系统设置'),
+                ),
+              ],
+            ),
           ],
         ),
       ),
@@ -122,20 +189,16 @@ class _ControlPanel extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _SectionTitle('模型切换'),
+              _SectionTitle('模型管理 / 切换'),
               const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: VisionModelType.values
-                    .map(
-                      (model) => ChoiceChip(
-                        label: Text(model.label),
-                        selected: model == controller.selectedModel,
-                        onSelected: (_) => controller.selectModel(model),
-                      ),
-                    )
-                    .toList(),
+              ...controller.modelStates.map(
+                (state) => _ModelTile(
+                  state: state,
+                  selected: state.manifest.type == controller.selectedModel,
+                  onSelect: () => controller.selectModel(state.manifest.type),
+                  onDownload: () => controller.downloadModel(state.manifest.type),
+                  onDelete: () => controller.removeModel(state.manifest.type),
+                ),
               ),
               const SizedBox(height: 14),
               _SectionTitle('算法切换'),
@@ -195,6 +258,78 @@ class _ControlPanel extends StatelessWidget {
           child: _EventBar(event: controller.latestEvent),
         ),
       ],
+    );
+  }
+}
+
+class _ModelTile extends StatelessWidget {
+  const _ModelTile({
+    required this.state,
+    required this.selected,
+    required this.onSelect,
+    required this.onDownload,
+    required this.onDelete,
+  });
+
+  final ModelRuntimeState state;
+  final bool selected;
+  final VoidCallback onSelect;
+  final VoidCallback onDownload;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final manifest = state.manifest;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    manifest.type.label,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                ),
+                if (selected)
+                  const Chip(
+                    label: Text('当前使用中'),
+                    visualDensity: VisualDensity.compact,
+                  ),
+              ],
+            ),
+            Text('${manifest.type.description} · ${manifest.sizeLabel}'),
+            const SizedBox(height: 8),
+            if (state.isDownloading)
+              LinearProgressIndicator(value: state.progress),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 8,
+              children: [
+                OutlinedButton(
+                  onPressed: (manifest.builtIn || state.isDownloaded) ? onSelect : null,
+                  child: const Text('切换'),
+                ),
+                if (!manifest.builtIn)
+                  FilledButton.tonal(
+                    onPressed: state.isDownloading ? null : onDownload,
+                    child: Text(state.isDownloaded ? '重新下载' : '下载模型'),
+                  ),
+                if (!manifest.builtIn)
+                  TextButton(
+                    onPressed: state.isDownloaded && !state.isDownloading ? onDelete : null,
+                    child: const Text('删除本地'),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
