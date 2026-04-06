@@ -582,6 +582,10 @@ class _AdaptiveCameraPreview extends StatelessWidget {
   }
 }
 
+/// 基于重力的自适应UI组件
+/// 
+/// 使用 RotatedBox 代替 AnimatedRotation，确保旋转后布局正确计算
+/// 避免横屏时元素旋转出屏幕外的问题
 class _AutoRotateByGravity extends StatelessWidget {
   const _AutoRotateByGravity({
     required this.turns,
@@ -593,11 +597,76 @@ class _AutoRotateByGravity extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedRotation(
-      turns: turns,
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOut,
-      child: child,
+    // 将 turns 转换为 quadrant (0, 1, 2, 3)
+    // 0: 0°, 1: 90°, 2: 180°, 3: 270°
+    final quadrant = ((turns % 1 + 1) % 1 * 4).round() % 4;
+    
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 250),
+      switchInCurve: Curves.easeOut,
+      switchOutCurve: Curves.easeOut,
+      transitionBuilder: (child, animation) {
+        return FadeTransition(
+          opacity: animation,
+          child: child,
+        );
+      },
+      child: _RotatedContent(
+        key: ValueKey<int>(quadrant),
+        quadrant: quadrant,
+        child: child,
+      ),
+    );
+  }
+}
+
+/// 旋转内容容器
+/// 
+/// 使用 RotatedBox 在布局阶段处理旋转，配合 OverflowBox 防止内容溢出
+class _RotatedContent extends StatelessWidget {
+  const _RotatedContent({
+    super.key,
+    required this.quadrant,
+    required this.child,
+  });
+
+  final int quadrant;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    // 使用 LayoutBuilder 获取父容器约束
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // 判断是否为横屏模式（基于可用空间）
+        final isLandscape = constraints.maxWidth > constraints.maxHeight;
+        
+        // 根据屏幕方向调整布局策略
+        if (isLandscape) {
+          // 横屏模式：使用更紧凑的布局
+          return RotatedBox(
+            quarterTurns: quadrant,
+            child: OverflowBox(
+              maxWidth: constraints.maxHeight,
+              maxHeight: constraints.maxWidth,
+              alignment: Alignment.center,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: constraints.maxHeight,
+                  maxHeight: constraints.maxWidth,
+                ),
+                child: child,
+              ),
+            ),
+          );
+        }
+        
+        // 竖屏模式：标准旋转
+        return RotatedBox(
+          quarterTurns: quadrant,
+          child: child,
+        );
+      },
     );
   }
 }
