@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../bluetooth/bluetooth_service.dart';
+import '../permission/permission_service.dart';
 import '../di/service_locator.dart';
 import 'widgets.dart';
 
@@ -23,6 +24,32 @@ class BluetoothPickerSheet extends StatefulWidget {
 
 class _BluetoothPickerSheetState extends State<BluetoothPickerSheet> {
   final _bluetoothService = getIt<BluetoothService>();
+  final _permissionService = getIt<PermissionService>();
+  bool _hasPermission = false;
+  bool _isCheckingPermission = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkPermission();
+  }
+
+  Future<void> _checkPermission() async {
+    final status = await _permissionService.checkPermission(AppPermission.bluetooth);
+    if (status == AppPermissionStatus.granted) {
+      setState(() {
+        _hasPermission = true;
+        _isCheckingPermission = false;
+      });
+    } else {
+      // 请求权限
+      final newStatus = await _permissionService.requestPermission(AppPermission.bluetooth);
+      setState(() {
+        _hasPermission = newStatus == AppPermissionStatus.granted;
+        _isCheckingPermission = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -65,18 +92,28 @@ class _BluetoothPickerSheetState extends State<BluetoothPickerSheet> {
             ),
           ),
           Expanded(
-            child: StreamBuilder(
-              stream: _bluetoothService.statusStream,
-              builder: (context, snapshot) {
-                // 如果蓝牙未开启，显示空状态
-                return const EmptyState(
-                  icon: Icons.bluetooth_disabled_rounded,
-                  title: '未检测到设备',
-                  subtitle: '请确保蓝牙已开启且设备处于广播状态',
-                  actionText: '重新扫描',
-                );
-              },
-            ),
+            child: _isCheckingPermission
+                ? const Center(child: CircularProgressIndicator())
+                : !_hasPermission
+                    ? EmptyState(
+                        icon: Icons.bluetooth_disabled_rounded,
+                        title: '需要蓝牙权限',
+                        subtitle: '请在系统设置中允许应用使用蓝牙',
+                        actionText: '打开设置',
+                        onAction: () => _permissionService.openSettings(),
+                      )
+                    : StreamBuilder(
+                        stream: _bluetoothService.statusStream,
+                        builder: (context, snapshot) {
+                          // 如果蓝牙未开启，显示空状态
+                          return const EmptyState(
+                            icon: Icons.bluetooth_disabled_rounded,
+                            title: '未检测到设备',
+                            subtitle: '请确保蓝牙已开启且设备处于广播状态',
+                            actionText: '重新扫描',
+                          );
+                        },
+                      ),
           ),
         ],
       ),
