@@ -45,8 +45,7 @@ class SettingsPage extends StatelessWidget {
                 onTap: () => _showThemeDialog(context, controller, state),
               ),
 
-              _buildSectionHeader(context, '权限管理 (调试专用)'),
-              _buildVisionPermissionTile(context, controller, state),
+              _buildSectionHeader(context, '权限管理'),
               ...AppPermission.values.map((p) => _buildPermissionTile(context, controller, p, state.permissions[p])),
               
               const Divider(),
@@ -104,60 +103,77 @@ class SettingsPage extends StatelessWidget {
   ) {
     final statusColor = _getPermissionStatusColor(status);
     final statusText = _getPermissionStatusText(status);
+    final isBluetooth = permission == AppPermission.bluetooth;
 
     return ListTile(
-      leading: Icon(_getPermissionIcon(permission)),
-      title: Text(_getPermissionName(permission)),
+      dense: true,
+      leading: Icon(_getPermissionIcon(permission), size: 22),
+      title: Text(
+        _getPermissionName(permission),
+        style: const TextStyle(fontSize: 14),
+      ),
       subtitle: Text(
         statusText,
-        style: TextStyle(color: statusColor, fontWeight: FontWeight.w500),
+        style: TextStyle(
+          color: statusColor, 
+          fontWeight: FontWeight.w500,
+          fontSize: 12,
+        ),
       ),
-      trailing: ElevatedButton(
-        onPressed: () => controller.requestPermission(permission),
-        child: const Text('请求'),
+      trailing: SizedBox(
+        width: 80,
+        child: _buildPermissionActionButton(
+          context, 
+          controller, 
+          permission, 
+          status,
+          isBluetooth: isBluetooth,
+        ),
       ),
     );
   }
 
-  Widget _buildVisionPermissionTile(
+  /// 构建权限操作按钮
+  Widget _buildPermissionActionButton(
     BuildContext context,
     SettingsController controller,
-    SettingsState state,
-  ) {
-    final statuses = PermissionService.visionDetectionRequiredPermissions
-        .map((permission) => state.permissions[permission])
-        .toList(growable: false);
-    final allGranted = statuses.every((status) => status == AppPermissionStatus.granted);
-    final hasPermanentDeny =
-        statuses.any((status) => status == AppPermissionStatus.permanentlyDenied);
-
-    final subtitle = allGranted
-        ? '视觉识别模块依赖权限已全部授权'
-        : hasPermanentDeny
-            ? '存在永久拒绝权限，需前往系统设置开启'
-            : '视觉识别模块仍缺少必要权限';
-
-    return Card(
-      margin: const EdgeInsets.fromLTRB(12, 8, 12, 6),
-      child: ListTile(
-        leading: const Icon(Icons.videocam_outlined),
-        title: const Text('视觉识别实验台权限'),
-        subtitle: Text(
-          subtitle,
-          style: TextStyle(
-            color: allGranted
-                ? Colors.green
-                : hasPermanentDeny
-                    ? Colors.red
-                    : Colors.orange,
-            fontWeight: FontWeight.w500,
-          ),
+    AppPermission permission,
+    AppPermissionStatus? status, {
+    required bool isBluetooth,
+  }) {
+    // 已授权状态
+    if (status == AppPermissionStatus.granted) {
+      return Center(
+        child: Icon(
+          Icons.check_circle,
+          color: Colors.green.shade600,
+          size: 22,
         ),
-        trailing: ElevatedButton(
-          onPressed: controller.requestVisionPermissions,
-          child: const Text('统一请求'),
+      );
+    }
+    
+    // 永久拒绝状态
+    if (status == AppPermissionStatus.permanentlyDenied) {
+      return TextButton(
+        onPressed: () => controller.openAppSettings(),
+        style: TextButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          minimumSize: Size.zero,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
+        child: const Text('去设置', style: TextStyle(fontSize: 12)),
+      );
+    }
+    
+    // 未授权状态
+    return OutlinedButton(
+      onPressed: () => controller.requestPermission(permission),
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        minimumSize: Size.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
+      child: const Text('请求', style: TextStyle(fontSize: 12)),
     );
   }
 
@@ -169,7 +185,8 @@ class SettingsPage extends StatelessWidget {
       case AppPermission.location: return '位置信息';
       case AppPermission.bluetooth: return '蓝牙连接';
       case AppPermission.notification: return '系统通知';
-      case AppPermission.sensors: return '运动传感器 (IMU)';
+      case AppPermission.sensors: return '运动传感器';
+      case AppPermission.activityRecognition: return '活动识别';
     }
   }
 
@@ -182,6 +199,7 @@ class SettingsPage extends StatelessWidget {
       case AppPermission.bluetooth: return Icons.bluetooth_outlined;
       case AppPermission.notification: return Icons.notifications_none_outlined;
       case AppPermission.sensors: return Icons.sensors_outlined;
+      case AppPermission.activityRecognition: return Icons.directions_run_outlined;
     }
   }
 

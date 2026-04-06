@@ -80,6 +80,23 @@ class SettingsController extends ChangeNotifier {
     await refreshPermissions();
   }
 
+  /// 请求IMU监测模块依赖权限
+  Future<Map<AppPermission, AppPermissionStatus>> requestIMUPermissions() async {
+    final result = await _permissionService.requestIMUPermissions();
+    await refreshPermissions();
+    return result;
+  }
+
+  /// 检查IMU权限状态
+  Future<bool> checkIMUPermissions() async {
+    return _permissionService.checkIMUPermissions();
+  }
+
+  /// 获取未授权的IMU权限
+  Future<List<AppPermission>> getDeniedIMUPermissions() async {
+    return _permissionService.getDeniedIMUPermissions();
+  }
+
   /// 打开系统设置
   Future<void> openAppSettings() async {
     await _permissionService.openSettings();
