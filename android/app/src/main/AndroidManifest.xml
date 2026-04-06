@@ -1,39 +1,110 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
-    <!-- 存储权限 -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+    
+    <!-- ============================================================================
+         存储权限 (Storage)
+         ============================================================================ -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
     <uses-permission 
         android:name="android.permission.WRITE_EXTERNAL_STORAGE" 
         android:maxSdkVersion="32" 
         tools:replace="android:maxSdkVersion" />
+    <!-- Android 13+ (API 33+) 使用新的媒体权限替代存储权限 -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     
-    <!-- 摄像头与多媒体 -->
+    <!-- ============================================================================
+         摄像头与多媒体 (Camera & Media)
+         ============================================================================ -->
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    
+    <!-- 摄像头硬件特性声明 -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
 
-    <!-- 蓝牙与位置权限 (BLE 扫描与连接必需) -->
+    <!-- ============================================================================
+         蓝牙权限 (Bluetooth) - Android 12+ (API 31+) 新权限模型
+         ============================================================================ -->
+    <!-- Android 12 以下兼容 -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <!-- Android 12+ 新权限 -->
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" 
-        android:usesPermissionFlags="neverForLocation" />
-    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+        android:usesPermissionFlags="neverForLocation"
+        tools:targetApi="31" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"
+        tools:targetApi="31" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE"
+        tools:targetApi="31" />
+    
+    <!-- 蓝牙硬件特性声明 -->
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
+
+    <!-- ============================================================================
+         位置权限 (Location) - 仅当需要定位功能时启用
+         ============================================================================ -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Android 10+ (API 29+) 后台定位 -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"
+        android:minSdkVersion="29" />
 
-    <!-- 运动传感器 (IMU) -->
-    <uses-permission android:name="android.permission.HIGH_SAMPLING_RATE_SENSORS" />
-    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+    <!-- ============================================================================
+         IMU 传感器权限 (Sensors & Activity Recognition)
+         符合 Android 10+ (API 29+) 和 Android 13+ (API 33+) 要求
+         ============================================================================ -->
+    <!-- 高采样率传感器 - Android 12+ (API 31+) -->
+    <uses-permission android:name="android.permission.HIGH_SAMPLING_RATE_SENSORS"
+        tools:targetApi="31" />
+    
+    <!-- 身体传感器 - Android 13+ (API 33+) 需要单独声明 -->
+    <uses-permission android:name="android.permission.BODY_SENSORS"
+        android:minSdkVersion="33" />
+    <!-- Android 12 及以下使用 sensors 权限组 -->
+    <uses-permission android:name="android.permission.BODY_SENSORS"
+        android:maxSdkVersion="32"
+        tools:node="replace" />
+    
+    <!-- 活动识别 - Android 10+ (API 29+) -->
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION"
+        android:minSdkVersion="29" />
+    
+    <!-- 传感器硬件特性声明 -->
+    <uses-feature android:name="android.hardware.sensor.accelerometer" android:required="true" />
+    <uses-feature android:name="android.hardware.sensor.gyroscope" android:required="false" />
+    <uses-feature android:name="android.hardware.sensor.compass" android:required="false" />
 
-    <!-- 网络与通知 -->
+    <!-- ============================================================================
+         通知权限 (Notifications) - Android 13+ (API 33+)
+         ============================================================================ -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"
+        android:minSdkVersion="33" />
+
+    <!-- ============================================================================
+         前台服务 (Foreground Service) - 用于后台传感器监测
+         ============================================================================ -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH"
+        android:minSdkVersion="34" />
+
+    <!-- ============================================================================
+         网络权限 (Network)
+         ============================================================================ -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- ============================================================================
+         应用配置 (Application Configuration)
+         ============================================================================ -->
     <application
         android:label="remep_mobile"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:requestLegacyExternalStorage="true"
+        android:enableOnBackInvokedCallback="true">
+        
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -43,34 +114,44 @@
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize">
-            <!-- Specifies an Android theme to apply to this Activity as soon as
-                 the Android process has started. This theme is visible to the user
-                 while the Flutter UI initializes. After that, this theme continues
-                 to determine the Window background behind the Flutter UI. -->
+            
             <meta-data
               android:name="io.flutter.embedding.android.NormalTheme"
               android:resource="@style/NormalTheme"
               />
+              
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
-        <!-- Don't delete the meta-data below.
-             This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
+        
+        <!-- Flutter Embedding -->
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+            
+        <!-- 前台服务配置 - Android 14+ 需要指定服务类型 -->
+        <service
+            android:name="id.flutter.flutter_background_service.BackgroundService"
+            android:foregroundServiceType="health"
+            tools:replace="android:foregroundServiceType"
+            tools:ignore="MissingClass" />
     </application>
-    <!-- Required to query activities that can process text, see:
-         https://developer.android.com/training/package-visibility and
-         https://developer.android.com/reference/android/content/Intent#ACTION_PROCESS_TEXT.
-
-         In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
+    
+    <!-- ============================================================================
+         包可见性 (Package Visibility) - Android 11+ (API 30+)
+         ============================================================================ -->
     <queries>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- 允许查询健康相关应用 -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" />
         </intent>
     </queries>
 </manifest>
