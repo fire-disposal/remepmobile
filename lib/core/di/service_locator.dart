@@ -25,7 +25,10 @@ Future<void> setupServiceLocator() async {
   getIt.registerLazySingleton<BluetoothService>(() => BluetoothService());
   getIt.registerLazySingleton<PermissionService>(() => PermissionService());
   getIt.registerFactory<VisionDetectionController>(
-    () => VisionDetectionController(mqttService: getIt<MqttService>()),
+    () => VisionDetectionController(
+      mqttService: getIt<MqttService>(),
+      permissionService: getIt<PermissionService>(),
+    ),
   );
   
   // 3. 注册依赖于存储的状态通知器
