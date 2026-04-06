@@ -54,3 +54,8 @@ coverage/
 
 # Test
 .test_coverage.dart
+
+# Model files (large binary files, download separately)
+assets/models/*.tflite
+assets/models/*.task
+assets/models/*.bin
