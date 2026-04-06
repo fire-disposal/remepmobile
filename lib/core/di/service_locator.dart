@@ -1,5 +1,6 @@
 ﻿import 'package:get_it/get_it.dart';
 import '../../features/settings/settings_module.dart';
+import '../../features/vision_detection/vision_detection_controller.dart';
 import '../bluetooth/bluetooth_service.dart';
 import '../mqtt/mqtt_service.dart';
 import '../permission/permission_service.dart';
@@ -23,6 +24,9 @@ Future<void> setupServiceLocator() async {
   getIt.registerLazySingleton<MqttService>(() => MqttService());
   getIt.registerLazySingleton<BluetoothService>(() => BluetoothService());
   getIt.registerLazySingleton<PermissionService>(() => PermissionService());
+  getIt.registerFactory<VisionDetectionController>(
+    () => VisionDetectionController(mqttService: getIt<MqttService>()),
+  );
   
   // 3. 注册依赖于存储的状态通知器
   getIt.registerSingleton<ThemeModeNotifier>(ThemeModeNotifier(getIt<CacheStorageService>()));
