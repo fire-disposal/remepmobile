@@ -55,14 +55,15 @@ class _VisionDetectionPageState extends State<VisionDetectionPage> {
       isScrollControlled: true,
       builder: (context) => SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-          child: ListView(
-            shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('模型管理 / 切换', style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 12),
+              Text('模型管理（紧凑）', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 10),
               ..._controller.modelStates.map(
-                (state) => _ModelTile(
+                (state) => _CompactModelTile(
                   state: state,
                   selected: state.manifest.type == _controller.selectedModel,
                   onSelect: () => _controller.selectModel(state.manifest.type),
@@ -83,29 +84,29 @@ class _VisionDetectionPageState extends State<VisionDetectionPage> {
       showDragHandle: true,
       builder: (context) => SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 18),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('算法切换', style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: VisionAlgorithmType.values
-                    .map(
-                      (algo) => ChoiceChip(
-                        label: Text(algo.label),
-                        selected: algo == _controller.selectedAlgorithm,
-                        onSelected: (_) => _controller.selectAlgorithm(algo),
-                      ),
-                    )
+              Text('算法切换（紧凑）', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 8),
+              SegmentedButton<VisionAlgorithmType>(
+                showSelectedIcon: false,
+                segments: VisionAlgorithmType.values
+                    .map((algo) => ButtonSegment<VisionAlgorithmType>(value: algo, label: Text(algo.label)))
                     .toList(),
+                selected: <VisionAlgorithmType>{_controller.selectedAlgorithm},
+                onSelectionChanged: (selection) {
+                  if (selection.isEmpty) {
+                    return;
+                  }
+                  _controller.selectAlgorithm(selection.first);
+                },
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               FilledButton.icon(
-                style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(46)),
+                style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(42)),
                 onPressed: _controller.toggleStreaming,
                 icon: Icon(_controller.isStreaming ? Icons.pause_rounded : Icons.play_arrow_rounded),
                 label: Text(_controller.isStreaming ? '暂停识别流' : '启动识别流'),
@@ -193,7 +194,7 @@ class _CameraWorkbench extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        CameraPreview(camera!),
+        _AdaptiveCameraPreview(camera: camera!),
         RepaintBoundary(
           child: CustomPaint(
             painter: DetectionOverlayPainter(controller.detections),
@@ -212,86 +213,163 @@ class _CameraWorkbench extends StatelessWidget {
         Positioned(
           left: 16,
           top: 56,
-          child: _MetricBadge(
-            text: 'FPS ${controller.fps}',
-            color: Colors.blueAccent,
+          child: _AutoRotateByGravity(
+            turns: controller.uiRotationTurns,
+            child: _MetricBadge(
+              text: 'FPS ${controller.fps}',
+              color: Colors.blueAccent,
+            ),
           ),
         ),
         Positioned(
           left: 16,
           top: 96,
-          child: _MetricBadge(
-            text: '延迟 ${controller.processingLatencyMs} ms',
-            color: Colors.green,
+          child: _AutoRotateByGravity(
+            turns: controller.uiRotationTurns,
+            child: _MetricBadge(
+              text: '延迟 ${controller.processingLatencyMs} ms',
+              color: Colors.green,
+            ),
+          ),
+        ),
+        Positioned(
+          right: 16,
+          top: 56,
+          child: _AutoRotateByGravity(
+            turns: controller.uiRotationTurns,
+            child: _MetricBadge(
+              text: '${controller.selectedModel.label} · ${controller.selectedAlgorithm.label}',
+              color: Colors.orangeAccent,
+            ),
           ),
         ),
         if (controller.fallAlarmOn)
           Positioned(
             left: 16,
             bottom: 48,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.red.withValues(alpha: 0.9),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Text(
-                '跌倒告警中',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+            child: _AutoRotateByGravity(
+              turns: controller.uiRotationTurns,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.red.withValues(alpha: 0.9),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Text(
+                  '跌倒告警中',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                ),
               ),
             ),
           ),
         SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 14),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    IconButton.filledTonal(
-                      tooltip: '返回',
-                      onPressed: () => Navigator.of(context).maybePop(),
-                      icon: const Icon(Icons.arrow_back),
-                    ),
-                    const SizedBox(width: 10),
-                    const Expanded(
-                      child: Text(
-                        '视觉识别实验台',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 17,
+            child: _AutoRotateByGravity(
+              turns: controller.uiRotationTurns,
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      IconButton.filledTonal(
+                        tooltip: '返回',
+                        onPressed: () => Navigator.of(context).maybePop(),
+                        icon: const Icon(Icons.arrow_back),
+                      ),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Text(
+                          '视觉识别实验台',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 17,
+                          ),
                         ),
                       ),
-                    ),
-                    IconButton.filled(
-                      tooltip: controller.isStreaming ? '暂停识别流' : '启动识别流',
-                      onPressed: controller.toggleStreaming,
-                      icon: Icon(
-                        controller.isStreaming ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                      IconButton.filled(
+                        tooltip: controller.isStreaming ? '暂停识别流' : '启动识别流',
+                        onPressed: controller.toggleStreaming,
+                        icon: Icon(
+                          controller.isStreaming ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-                const Spacer(),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Wrap(
-                    direction: Axis.vertical,
-                    spacing: 10,
-                    children: [
-                      _QuickActionButton(icon: Icons.memory_rounded, label: '模型', onTap: onModelPanelTap),
-                      _QuickActionButton(icon: Icons.tune_rounded, label: '算法', onTap: onAlgorithmPanelTap),
-                      _QuickActionButton(icon: Icons.wifi_tethering, label: 'MQTT', onTap: onMqttPanelTap),
-                      _QuickActionButton(icon: Icons.event_note_rounded, label: '事件', onTap: onEventPanelTap),
                     ],
                   ),
-                ),
-              ],
+                  const Spacer(),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Wrap(
+                      direction: Axis.vertical,
+                      spacing: 10,
+                      children: [
+                        _QuickActionButton(icon: Icons.memory_rounded, label: '模型', onTap: onModelPanelTap),
+                        _QuickActionButton(icon: Icons.tune_rounded, label: '算法', onTap: onAlgorithmPanelTap),
+                        _QuickActionButton(icon: Icons.wifi_tethering, label: 'MQTT', onTap: onMqttPanelTap),
+                        _QuickActionButton(icon: Icons.event_note_rounded, label: '事件', onTap: onEventPanelTap),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
       ],
+    );
+  }
+}
+
+class _AdaptiveCameraPreview extends StatelessWidget {
+  const _AdaptiveCameraPreview({required this.camera});
+
+  final CameraController camera;
+
+  @override
+  Widget build(BuildContext context) {
+    final previewSize = camera.value.previewSize;
+    if (previewSize == null) {
+      return CameraPreview(camera);
+    }
+
+    final screenSize = MediaQuery.sizeOf(context);
+    final isPortrait = screenSize.height >= screenSize.width;
+    final previewWidth = isPortrait ? previewSize.height : previewSize.width;
+    final previewHeight = isPortrait ? previewSize.width : previewSize.height;
+
+    return ClipRect(
+      child: OverflowBox(
+        maxWidth: double.infinity,
+        maxHeight: double.infinity,
+        child: FittedBox(
+          fit: BoxFit.cover,
+          child: SizedBox(
+            width: previewWidth,
+            height: previewHeight,
+            child: CameraPreview(camera),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AutoRotateByGravity extends StatelessWidget {
+  const _AutoRotateByGravity({
+    required this.turns,
+    required this.child,
+  });
+
+  final double turns;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedRotation(
+      turns: turns,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+      child: child,
     );
   }
 }
@@ -369,8 +447,8 @@ class _PermissionBlock extends StatelessWidget {
   }
 }
 
-class _ModelTile extends StatelessWidget {
-  const _ModelTile({
+class _CompactModelTile extends StatelessWidget {
+  const _CompactModelTile({
     required this.state,
     required this.selected,
     required this.onSelect,
@@ -387,13 +465,16 @@ class _ModelTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final manifest = state.manifest;
-    return Card(
+    return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(
+        color: selected ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.45) : null,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Theme.of(context).dividerColor.withValues(alpha: 0.6)),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(10),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
@@ -403,37 +484,56 @@ class _ModelTile extends StatelessWidget {
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
                   ),
                 ),
-                if (selected)
-                  const Chip(
-                    label: Text('当前使用中'),
-                    visualDensity: VisualDensity.compact,
-                  ),
-              ],
-            ),
-            Text('${manifest.type.description} · ${manifest.sizeLabel}'),
-            const SizedBox(height: 8),
-            if (state.isDownloading)
-              LinearProgressIndicator(value: state.progress),
-            const SizedBox(height: 4),
-            Wrap(
-              spacing: 8,
-              children: [
-                OutlinedButton(
-                  onPressed: (manifest.builtIn || state.isDownloaded) ? onSelect : null,
-                  child: const Text('切换'),
+                Text(
+                  manifest.sizeLabel,
+                  style: Theme.of(context).textTheme.bodySmall,
                 ),
-                if (!manifest.builtIn)
-                  FilledButton.tonal(
-                    onPressed: state.isDownloading ? null : onDownload,
-                    child: Text(state.isDownloaded ? '重新下载' : '下载模型'),
-                  ),
-                if (!manifest.builtIn)
-                  TextButton(
-                    onPressed: state.isDownloaded && !state.isDownloading ? onDelete : null,
-                    child: const Text('删除本地'),
-                  ),
+                const SizedBox(width: 8),
+                if (selected)
+                  const Icon(Icons.check_circle_rounded, size: 18, color: Colors.green),
               ],
             ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                manifest.type.description,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+            if (state.isDownloading) ...[
+              const SizedBox(height: 6),
+              LinearProgressIndicator(value: state.progress),
+            ],
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                IconButton.outlined(
+                  visualDensity: VisualDensity.compact,
+                  tooltip: '切换模型',
+                  onPressed: (manifest.builtIn || state.isDownloaded) ? onSelect : null,
+                  icon: const Icon(Icons.swap_horiz_rounded),
+                ),
+                if (!manifest.builtIn) ...[
+                  const SizedBox(width: 6),
+                  IconButton.filledTonal(
+                    visualDensity: VisualDensity.compact,
+                    tooltip: state.isDownloaded ? '重新下载' : '下载模型',
+                    onPressed: state.isDownloading ? null : onDownload,
+                    icon: Icon(state.isDownloaded ? Icons.download_for_offline_rounded : Icons.download_rounded),
+                  ),
+                  const SizedBox(width: 6),
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    tooltip: '删除本地',
+                    onPressed: state.isDownloaded && !state.isDownloading ? onDelete : null,
+                    icon: const Icon(Icons.delete_outline_rounded),
+                  ),
+                ],
+              ],
+            )
           ],
         ),
       ),

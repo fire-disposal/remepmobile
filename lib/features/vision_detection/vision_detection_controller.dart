@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:camera/camera.dart';
@@ -28,7 +29,6 @@ class VisionDetectionController extends ChangeNotifier {
 
   CameraController? _cameraController;
   StreamSubscription<AccelerometerEvent>? _gravitySub;
-  Timer? _mockInferenceTimer;
 
   bool _isInitializing = false;
   bool _isStreaming = false;
@@ -46,6 +46,8 @@ class VisionDetectionController extends ChangeNotifier {
   DateTime? _lastFrameTime;
   int _processingLatencyMs = 0;
   bool _fallAlarmOn = false;
+  double? _previousLumaMean;
+  double _recentMotion = 0;
 
   final List<_FrameFeature> _history = [];
 
@@ -89,6 +91,21 @@ class VisionDetectionController extends ChangeNotifier {
   VisionAlgorithmType get selectedAlgorithm => _selectedAlgorithm;
   VisionPermissionState get permissionState => _permissionState;
   GravitySnapshot get gravitySnapshot => _gravitySnapshot;
+  double get uiRotationTurns {
+    final x = _gravitySnapshot.x;
+    final y = _gravitySnapshot.y;
+    final absX = x.abs();
+    final absY = y.abs();
+    const axisThreshold = 3.0;
+
+    if (absX > absY && absX > axisThreshold) {
+      return x >= 0 ? -0.25 : 0.25;
+    }
+    if (absY > axisThreshold) {
+      return y >= 0 ? 0.5 : 0.0;
+    }
+    return 0.0;
+  }
   List<DetectionBox> get detections => _detections;
   VisionEvent? get latestEvent => _latestEvent;
   String get mqttBroker => _mqttBroker;
@@ -195,19 +212,23 @@ class VisionDetectionController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _dio.download(
-        manifest.downloadUrl,
-        filePath,
-        onReceiveProgress: (received, total) {
-          final progress = total <= 0 ? 0.0 : received / total;
-          final current = _modelStates[model];
-          if (current == null) {
-            return;
-          }
-          _modelStates[model] = current.copyWith(progress: progress);
-          notifyListeners();
-        },
-      );
+      if (_isMockDownloadUrl(manifest.downloadUrl)) {
+        await _emulateModelDownload(model: model, manifest: manifest, filePath: filePath);
+      } else {
+        await _dio.download(
+          manifest.downloadUrl,
+          filePath,
+          onReceiveProgress: (received, total) {
+            final progress = total <= 0 ? 0.0 : received / total;
+            final current = _modelStates[model];
+            if (current == null) {
+              return;
+            }
+            _modelStates[model] = current.copyWith(progress: progress);
+            notifyListeners();
+          },
+        );
+      }
       final current = _modelStates[model];
       if (current != null) {
         _modelStates[model] = current.copyWith(
@@ -233,6 +254,34 @@ class VisionDetectionController extends ChangeNotifier {
       );
     }
     notifyListeners();
+  }
+
+  bool _isMockDownloadUrl(String url) {
+    if (url.isEmpty) {
+      return true;
+    }
+    return Uri.tryParse(url)?.host == 'example.com';
+  }
+
+  Future<void> _emulateModelDownload({
+    required VisionModelType model,
+    required ModelManifest manifest,
+    required String filePath,
+  }) async {
+    for (var i = 1; i <= 5; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 160));
+      final current = _modelStates[model];
+      if (current == null) {
+        return;
+      }
+      _modelStates[model] = current.copyWith(progress: i / 5);
+      notifyListeners();
+    }
+
+    final content = Uint8List.fromList(
+      'mock_model:${manifest.type.name}:${DateTime.now().toIso8601String()}'.codeUnits,
+    );
+    await File(filePath).writeAsBytes(content, flush: true);
   }
 
   Future<void> removeModel(VisionModelType model) async {
@@ -296,26 +345,40 @@ class VisionDetectionController extends ChangeNotifier {
     }
 
     if (_isStreaming) {
-      _stopStreaming();
+      await _stopStreaming();
+      return;
+    }
+
+    if (_cameraController == null || !_cameraController!.value.isInitialized) {
+      _latestEvent = VisionEvent(
+        title: '摄像头未就绪',
+        detail: '请等待摄像头初始化完成后再启动识别流。',
+        timestamp: DateTime.now(),
+      );
+      notifyListeners();
       return;
     }
 
     _isStreaming = true;
     _fallAlarmOn = false;
     _history.clear();
+    _previousLumaMean = null;
+    _recentMotion = 0;
+    _fps = 0;
+    _processingLatencyMs = 0;
+    _lastFrameTime = null;
     _latestEvent = VisionEvent(
       title: '视频流启动',
       detail: '模型 ${_selectedModel.label} + 算法 ${_selectedAlgorithm.label} 已激活。',
       timestamp: DateTime.now(),
     );
     notifyListeners();
-
-    _mockInferenceTimer = Timer.periodic(const Duration(milliseconds: 120), (_) {
-      unawaited(_processFrame());
+    await _cameraController!.startImageStream((image) {
+      unawaited(_processFrame(image));
     });
   }
 
-  Future<void> _processFrame() async {
+  Future<void> _processFrame(CameraImage image) async {
     if (_isFrameBeingProcessed || !_isStreaming) {
       return;
     }
@@ -324,8 +387,7 @@ class VisionDetectionController extends ChangeNotifier {
     final start = DateTime.now();
 
     try {
-      await Future<void>.delayed(const Duration(milliseconds: 35));
-      _detections = _runMockPersonInference();
+      _detections = _runFrameDrivenInference(image);
 
       final now = DateTime.now();
       if (_lastFrameTime != null) {
@@ -344,27 +406,107 @@ class VisionDetectionController extends ChangeNotifier {
     }
   }
 
-  List<DetectionBox> _runMockPersonInference() {
-    final random = Random();
-    final simulatedFallProgress = max(0.0, min(1.0, sin(DateTime.now().millisecond / 1000 * pi)));
+  List<DetectionBox> _runFrameDrivenInference(CameraImage image) {
+    final plane = image.planes.first;
+    final luma = plane.bytes;
+    if (luma.isEmpty || image.width <= 0 || image.height <= 0) {
+      return const [];
+    }
 
-    final x = 0.33 + random.nextDouble() * 0.25;
-    final y = 0.10 + simulatedFallProgress * 0.42;
-    final width = 0.18 + simulatedFallProgress * 0.26 + random.nextDouble() * 0.05;
-    final height = 0.52 - simulatedFallProgress * 0.28 + random.nextDouble() * 0.04;
+    final stepX = max(4, image.width ~/ 24);
+    final stepY = max(4, image.height ~/ 24);
+    final bytesPerPixel = plane.bytesPerPixel ?? 1;
+    final rowStride = plane.bytesPerRow;
+
+    double sumLuma = 0;
+    double sumX = 0;
+    double sumY = 0;
+    var samples = 0;
+
+    for (var y = 0; y < image.height; y += stepY) {
+      final rowStart = y * rowStride;
+      for (var x = 0; x < image.width; x += stepX) {
+        final index = rowStart + x * bytesPerPixel;
+        if (index < 0 || index >= luma.length) {
+          continue;
+        }
+        final value = luma[index].toDouble();
+        sumLuma += value;
+        sumX += value * x;
+        sumY += value * y;
+        samples++;
+      }
+    }
+
+    if (samples == 0 || sumLuma <= 0) {
+      return const [];
+    }
+
+    final meanLuma = sumLuma / samples;
+    if (meanLuma < 8) {
+      return const [];
+    }
+
+    final cx = (sumX / sumLuma / image.width).clamp(0.0, 1.0);
+    final cy = (sumY / sumLuma / image.height).clamp(0.0, 1.0);
+
+    if (_previousLumaMean != null) {
+      final frameMotion = (meanLuma - _previousLumaMean!).abs() / 255;
+      _recentMotion = _recentMotion * 0.65 + frameMotion * 0.35;
+    }
+    _previousLumaMean = meanLuma;
+
+    final modelSpec = _modelSpecFor(_selectedModel);
+    final width = (modelSpec.baseWidth + _recentMotion * modelSpec.motionWidthGain).clamp(0.12, 0.82);
+    final height = (modelSpec.baseHeight - _recentMotion * modelSpec.motionHeightGain).clamp(0.18, 0.85);
+    final left = (cx - width / 2).clamp(0.0, 1.0 - width);
+    final top = (cy - height / 2).clamp(0.0, 1.0 - height);
+    final confidence = (modelSpec.baseConfidence + min(_recentMotion, 0.3)).clamp(0.5, 0.98);
 
     return [
       DetectionBox(
-        normalizedRect: Rect.fromLTWH(
-          x.clamp(0.02, 0.95),
-          y.clamp(0.02, 0.95),
-          width.clamp(0.1, 0.7),
-          height.clamp(0.15, 0.7),
-        ),
-        label: 'Person',
-        confidence: 0.78 + random.nextDouble() * 0.18,
+        normalizedRect: Rect.fromLTWH(left, top, width, height),
+        label: modelSpec.label,
+        confidence: confidence,
       ),
     ];
+  }
+
+  _ModelSpec _modelSpecFor(VisionModelType model) {
+    return switch (model) {
+      VisionModelType.builtinPersonFast => const _ModelSpec(
+          label: 'Person/Fast',
+          baseWidth: 0.26,
+          baseHeight: 0.54,
+          motionWidthGain: 0.18,
+          motionHeightGain: 0.16,
+          baseConfidence: 0.72,
+        ),
+      VisionModelType.poseNano => const _ModelSpec(
+          label: 'Pose/Nano',
+          baseWidth: 0.22,
+          baseHeight: 0.48,
+          motionWidthGain: 0.14,
+          motionHeightGain: 0.12,
+          baseConfidence: 0.68,
+        ),
+      VisionModelType.personDetectorLite => const _ModelSpec(
+          label: 'Person/Lite',
+          baseWidth: 0.3,
+          baseHeight: 0.56,
+          motionWidthGain: 0.22,
+          motionHeightGain: 0.2,
+          baseConfidence: 0.75,
+        ),
+      VisionModelType.bodyKeypointLite => const _ModelSpec(
+          label: 'BodyKeypoint',
+          baseWidth: 0.28,
+          baseHeight: 0.5,
+          motionWidthGain: 0.2,
+          motionHeightGain: 0.18,
+          baseConfidence: 0.7,
+        ),
+    };
   }
 
   void _evaluateEvent() {
@@ -482,12 +624,16 @@ class VisionDetectionController extends ChangeNotifier {
     );
   }
 
-  void _stopStreaming() {
-    _mockInferenceTimer?.cancel();
-    _mockInferenceTimer = null;
+  Future<void> _stopStreaming() async {
+    final camera = _cameraController;
+    if (camera != null && camera.value.isStreamingImages) {
+      await camera.stopImageStream();
+    }
     _isStreaming = false;
     _fallAlarmOn = false;
     _history.clear();
+    _previousLumaMean = null;
+    _recentMotion = 0;
     _detections = const [];
     _latestEvent = VisionEvent(
       title: '视频流暂停',
@@ -499,12 +645,29 @@ class VisionDetectionController extends ChangeNotifier {
 
   @override
   void dispose() {
-    _mockInferenceTimer?.cancel();
     _gravitySub?.cancel();
     _cameraController?.dispose();
     _dio.close();
     super.dispose();
   }
+}
+
+class _ModelSpec {
+  final String label;
+  final double baseWidth;
+  final double baseHeight;
+  final double motionWidthGain;
+  final double motionHeightGain;
+  final double baseConfidence;
+
+  const _ModelSpec({
+    required this.label,
+    required this.baseWidth,
+    required this.baseHeight,
+    required this.motionWidthGain,
+    required this.motionHeightGain,
+    required this.baseConfidence,
+  });
 }
 
 class _FrameFeature {
