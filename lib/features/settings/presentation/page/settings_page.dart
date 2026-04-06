@@ -46,6 +46,7 @@ class SettingsPage extends StatelessWidget {
               ),
 
               _buildSectionHeader(context, '权限管理 (调试专用)'),
+              _buildVisionPermissionTile(context, controller, state),
               ...AppPermission.values.map((p) => _buildPermissionTile(context, controller, p, state.permissions[p])),
               
               const Divider(),
@@ -114,6 +115,48 @@ class SettingsPage extends StatelessWidget {
       trailing: ElevatedButton(
         onPressed: () => controller.requestPermission(permission),
         child: const Text('请求'),
+      ),
+    );
+  }
+
+  Widget _buildVisionPermissionTile(
+    BuildContext context,
+    SettingsController controller,
+    SettingsState state,
+  ) {
+    final statuses = PermissionService.visionDetectionRequiredPermissions
+        .map((permission) => state.permissions[permission])
+        .toList(growable: false);
+    final allGranted = statuses.every((status) => status == AppPermissionStatus.granted);
+    final hasPermanentDeny =
+        statuses.any((status) => status == AppPermissionStatus.permanentlyDenied);
+
+    final subtitle = allGranted
+        ? '视觉识别模块依赖权限已全部授权'
+        : hasPermanentDeny
+            ? '存在永久拒绝权限，需前往系统设置开启'
+            : '视觉识别模块仍缺少必要权限';
+
+    return Card(
+      margin: const EdgeInsets.fromLTRB(12, 8, 12, 6),
+      child: ListTile(
+        leading: const Icon(Icons.videocam_outlined),
+        title: const Text('视觉识别实验台权限'),
+        subtitle: Text(
+          subtitle,
+          style: TextStyle(
+            color: allGranted
+                ? Colors.green
+                : hasPermanentDeny
+                    ? Colors.red
+                    : Colors.orange,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        trailing: ElevatedButton(
+          onPressed: controller.requestVisionPermissions,
+          child: const Text('统一请求'),
+        ),
       ),
     );
   }
