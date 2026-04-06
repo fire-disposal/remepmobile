@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:mqtt_client/mqtt_client.dart';
 import 'package:mqtt_client/mqtt_server_client.dart';
 
-authimport 'mqtt_models.dart';
+import 'mqtt_models.dart';
 import '../errors/exceptions.dart';
 
 /// MQTT连接状态
@@ -72,7 +72,7 @@ class MqttService {
         }
       }
 
-        _client!.connectionMessage = connMsg;
+      _client!.connectionMessage = connMsg;
       _client!.connectTimeoutPeriod = config.connectionTimeout * 1000;
 
       // 连接
@@ -163,7 +163,7 @@ class MqttService {
     final builder = MqttClientPayloadBuilder();
     builder.addString(message);
 
-    _client?.publishMessage(topic, qos, builder.payload!);
+    _client?.publishMessage(topic, qos, builder.payload!, retain: retain);
   }
 
   /// 获取消息流
