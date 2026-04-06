@@ -1,32 +1,31 @@
 # ReMep Mobile
 
-ReMep Mobile 当前以「统一登录 + 后台壳层 + 轻量路由」为核心，优先降低多人并行开发时的心智负担。
+当前版本为**本地测试优先**应用：无登录、无后端鉴权依赖，主界面为顶部栏 + 卡片入口，用于快速验证 MQTT / 视觉跌倒 / IMU 跌倒 / 蓝牙接收调试。
 
-## 设计原则（当前版本）
+## 当前模块
 
-- **少层次、少跳转**：不强求每个功能都有独立 `Module`。
-- **鉴权全局化**：登录和会话管理只在基础设施层处理。
-- **功能接入最短路径**：新增功能通常只需要两步：
-  1. 在 `app_sections.dart` 注册菜单项。
-  2. 在 `app_module.dart` 增加一个 `ChildRoute` 页面。
+- MQTT 数据模拟
+- 视觉跌倒检测（开发起点：依赖检查 + 模型加载占位 + 单次推理模拟）
+- IMU 跌倒检测（开发起点：`sensors_plus` 实时流 + 阈值策略 + mock 采样）
+- 蓝牙数据接收调试
 
-## 核心结构
+## 关键依赖（视觉 + IMU）
 
-- `lib/core/`：基础设施与控制器统一注册（DI 集中管理）
-- `lib/app_sections.dart`：内部模块注册表（菜单 + 路由）
-- `lib/app_module.dart`：应用路由入口（登录态 + `/app/*`）
-- `lib/pages/app_shell_page.dart`：后台壳层（NavigationRail + RouterOutlet）
+```bash
+flutter pub add camera tflite_flutter permission_handler path_provider sensors_plus
+```
+
+> 视觉模块默认按 `camera + tflite_flutter + assets/models` 的接入路径设计。
+> IMU 模块默认按 `sensors_plus` 加速度流接入，阈值逻辑可直接替换为业务策略。
 
 ## 路由
 
-- `/`：启动页（恢复会话并重定向）
-- `/login`：统一登录
-- `/app/dashboard`
-- `/app/mqtt-debug`
-- `/app/fall-detector`
-- `/app/settings`
-
-`/app/*` 全部受 `AuthGuard` 保护。
+- `/`：启动页（自动跳转）
+- `/app/dashboard`：模块入口卡片页
+- `/app/mqtt-simulator`
+- `/app/vision-fall-detection`
+- `/app/imu-fall-detection`
+- `/app/bluetooth-debug`
 
 ## 快速开始
 
