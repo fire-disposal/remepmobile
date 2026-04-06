@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
+import 'dart:ui';
 
 import 'package:camera/camera.dart';
 import 'package:dio/dio.dart';
@@ -154,7 +155,7 @@ class VisionDetectionController extends ChangeNotifier {
       if (manifest.builtIn) {
         _modelStates[manifest.type] = _modelStates[manifest.type]!.copyWith(
           isDownloaded: true,
-          progress: 1,
+          progress: 1.0,
         );
         continue;
       }
@@ -185,7 +186,7 @@ class VisionDetectionController extends ChangeNotifier {
     final dir = await _modelDirectory();
     final filePath = '${dir.path}/${manifest.fileName}';
 
-    _modelStates[model] = state.copyWith(isDownloading: true, progress: 0);
+      _modelStates[model] = state.copyWith(isDownloading: true, progress: 0.0);
     _latestEvent = VisionEvent(
       title: '模型下载开始',
       detail: '${manifest.type.label} 下载中...',
@@ -198,7 +199,7 @@ class VisionDetectionController extends ChangeNotifier {
         manifest.downloadUrl,
         filePath,
         onReceiveProgress: (received, total) {
-          final progress = total <= 0 ? 0 : received / total;
+          final progress = total <= 0 ? 0.0 : received / total;
           final current = _modelStates[model];
           if (current == null) {
             return;
@@ -212,7 +213,7 @@ class VisionDetectionController extends ChangeNotifier {
         _modelStates[model] = current.copyWith(
           isDownloading: false,
           isDownloaded: true,
-          progress: 1,
+          progress: 1.0,
         );
       }
       _latestEvent = VisionEvent(
@@ -223,7 +224,7 @@ class VisionDetectionController extends ChangeNotifier {
     } catch (_) {
       final current = _modelStates[model];
       if (current != null) {
-        _modelStates[model] = current.copyWith(isDownloading: false, progress: 0);
+        _modelStates[model] = current.copyWith(isDownloading: false, progress: 0.0);
       }
       _latestEvent = VisionEvent(
         title: '模型下载失败',
@@ -244,7 +245,7 @@ class VisionDetectionController extends ChangeNotifier {
     if (await file.exists()) {
       await file.delete();
     }
-    _modelStates[model] = state.copyWith(isDownloaded: false, progress: 0);
+    _modelStates[model] = state.copyWith(isDownloaded: false, progress: 0.0);
     if (_selectedModel == model) {
       _selectedModel = VisionModelType.builtinPersonFast;
     }
