@@ -7,11 +7,11 @@ class DashboardPage extends StatelessWidget {
 
   static const _modules = [
     _ModuleItem(
-      title: 'IMU 监测',
+      title: 'IMU 运动监测',
       icon: Icons.accessibility_new_rounded,
       color: Colors.deepPurple,
       route: '/app/imu',
-      description: '动态 IMU 数据与跌倒行为识别',
+      description: '使用手机内置传感器进行运动检测与跌倒识别',
     ),
     _ModuleItem(
       title: '视觉跌倒检查',
