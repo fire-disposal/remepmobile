@@ -33,34 +33,149 @@ class _VisionDetectionPageState extends State<VisionDetectionPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('视觉识别实验台')),
       body: AnimatedBuilder(
         animation: _controller,
         builder: (context, _) {
-          return SafeArea(
-            child: Column(
-              children: [
-                Expanded(
-                  flex: 6,
-                  child: _CameraPanel(controller: _controller),
-                ),
-                Expanded(
-                  flex: 7,
-                  child: _ControlPanel(controller: _controller),
-                ),
-              ],
-            ),
+          return _CameraWorkbench(
+            controller: _controller,
+            onModelPanelTap: () => _showModelPanel(context),
+            onAlgorithmPanelTap: () => _showAlgorithmPanel(context),
+            onMqttPanelTap: () => _showMqttPanel(context),
+            onEventPanelTap: () => _showEventPanel(context),
           );
         },
       ),
     );
   }
+
+  Future<void> _showModelPanel(BuildContext context) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              Text('模型管理 / 切换', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 12),
+              ..._controller.modelStates.map(
+                (state) => _ModelTile(
+                  state: state,
+                  selected: state.manifest.type == _controller.selectedModel,
+                  onSelect: () => _controller.selectModel(state.manifest.type),
+                  onDownload: () => _controller.downloadModel(state.manifest.type),
+                  onDelete: () => _controller.removeModel(state.manifest.type),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showAlgorithmPanel(BuildContext context) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('算法切换', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: VisionAlgorithmType.values
+                    .map(
+                      (algo) => ChoiceChip(
+                        label: Text(algo.label),
+                        selected: algo == _controller.selectedAlgorithm,
+                        onSelected: (_) => _controller.selectAlgorithm(algo),
+                      ),
+                    )
+                    .toList(),
+              ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(46)),
+                onPressed: _controller.toggleStreaming,
+                icon: Icon(_controller.isStreaming ? Icons.pause_rounded : Icons.play_arrow_rounded),
+                label: Text(_controller.isStreaming ? '暂停识别流' : '启动识别流'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showMqttPanel(BuildContext context) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('MQTT 地址配置', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 12),
+              _MqttConfigRow(controller: _controller),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showEventPanel(BuildContext context) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('状态与事件', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 12),
+              ModernCard(borderRadius: BorderRadius.circular(16), child: _GravityBar(controller: _controller)),
+              const SizedBox(height: 10),
+              ModernCard(borderRadius: BorderRadius.circular(16), child: _EventBar(event: _controller.latestEvent)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-class _CameraPanel extends StatelessWidget {
-  const _CameraPanel({required this.controller});
+class _CameraWorkbench extends StatelessWidget {
+  const _CameraWorkbench({
+    required this.controller,
+    required this.onModelPanelTap,
+    required this.onAlgorithmPanelTap,
+    required this.onMqttPanelTap,
+    required this.onEventPanelTap,
+  });
 
   final VisionDetectionController controller;
+  final VoidCallback onModelPanelTap;
+  final VoidCallback onAlgorithmPanelTap;
+  final VoidCallback onMqttPanelTap;
+  final VoidCallback onEventPanelTap;
 
   @override
   Widget build(BuildContext context) {
@@ -75,54 +190,134 @@ class _CameraPanel extends StatelessWidget {
       return const Center(child: CircularProgressIndicator());
     }
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            CameraPreview(camera!),
-            RepaintBoundary(
-              child: CustomPaint(
-                painter: DetectionOverlayPainter(controller.detections),
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        CameraPreview(camera!),
+        RepaintBoundary(
+          child: CustomPaint(
+            painter: DetectionOverlayPainter(controller.detections),
+          ),
+        ),
+        const DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0x66000000), Colors.transparent, Color(0x4D000000)],
+              stops: [0, 0.45, 1],
+            ),
+          ),
+        ),
+        Positioned(
+          left: 16,
+          top: 56,
+          child: _MetricBadge(
+            text: 'FPS ${controller.fps}',
+            color: Colors.blueAccent,
+          ),
+        ),
+        Positioned(
+          left: 16,
+          top: 96,
+          child: _MetricBadge(
+            text: '延迟 ${controller.processingLatencyMs} ms',
+            color: Colors.green,
+          ),
+        ),
+        if (controller.fallAlarmOn)
+          Positioned(
+            left: 16,
+            bottom: 48,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.red.withValues(alpha: 0.9),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Text(
+                '跌倒告警中',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
               ),
             ),
-            Positioned(
-              left: 10,
-              top: 10,
-              child: _MetricBadge(
-                text: 'FPS ${controller.fps}',
-                color: Colors.blueAccent,
-              ),
-            ),
-            Positioned(
-              right: 10,
-              top: 10,
-              child: _MetricBadge(
-                text: '延迟 ${controller.processingLatencyMs} ms',
-                color: Colors.green,
-              ),
-            ),
-            if (controller.fallAlarmOn)
-              Positioned(
-                left: 12,
-                bottom: 12,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.red.withValues(alpha: 0.9),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Text(
-                    '跌倒告警中',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+          ),
+        SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 14),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    IconButton.filledTonal(
+                      tooltip: '返回',
+                      onPressed: () => Navigator.of(context).maybePop(),
+                      icon: const Icon(Icons.arrow_back),
+                    ),
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Text(
+                        '视觉识别实验台',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 17,
+                        ),
+                      ),
+                    ),
+                    IconButton.filled(
+                      tooltip: controller.isStreaming ? '暂停识别流' : '启动识别流',
+                      onPressed: controller.toggleStreaming,
+                      icon: Icon(
+                        controller.isStreaming ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                      ),
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Wrap(
+                    direction: Axis.vertical,
+                    spacing: 10,
+                    children: [
+                      _QuickActionButton(icon: Icons.memory_rounded, label: '模型', onTap: onModelPanelTap),
+                      _QuickActionButton(icon: Icons.tune_rounded, label: '算法', onTap: onAlgorithmPanelTap),
+                      _QuickActionButton(icon: Icons.wifi_tethering, label: 'MQTT', onTap: onMqttPanelTap),
+                      _QuickActionButton(icon: Icons.event_note_rounded, label: '事件', onTap: onEventPanelTap),
+                    ],
                   ),
                 ),
-              ),
-          ],
+              ],
+            ),
+          ),
         ),
+      ],
+    );
+  }
+}
+
+class _QuickActionButton extends StatelessWidget {
+  const _QuickActionButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return FilledButton.tonalIcon(
+      onPressed: onTap,
+      style: FilledButton.styleFrom(
+        backgroundColor: Colors.black.withValues(alpha: 0.45),
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       ),
+      icon: Icon(icon),
+      label: Text(label),
     );
   }
 }
@@ -146,7 +341,7 @@ class _PermissionBlock extends StatelessWidget {
             const Icon(Icons.privacy_tip_outlined, size: 42),
             const SizedBox(height: 12),
             Text(
-              isPermanent ? '权限被永久拒绝' : '需要摄像头与运动传感器权限',
+              isPermanent ? '权限被永久拒绝' : '需要摄像头权限',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
@@ -170,94 +365,6 @@ class _PermissionBlock extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _ControlPanel extends StatelessWidget {
-  const _ControlPanel({required this.controller});
-
-  final VisionDetectionController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      children: [
-        ModernCard(
-          borderRadius: BorderRadius.circular(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _SectionTitle('模型管理 / 切换'),
-              const SizedBox(height: 10),
-              ...controller.modelStates.map(
-                (state) => _ModelTile(
-                  state: state,
-                  selected: state.manifest.type == controller.selectedModel,
-                  onSelect: () => controller.selectModel(state.manifest.type),
-                  onDownload: () => controller.downloadModel(state.manifest.type),
-                  onDelete: () => controller.removeModel(state.manifest.type),
-                ),
-              ),
-              const SizedBox(height: 14),
-              _SectionTitle('算法切换'),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: VisionAlgorithmType.values
-                    .map(
-                      (algo) => ChoiceChip(
-                        label: Text(algo.label),
-                        selected: algo == controller.selectedAlgorithm,
-                        onSelected: (_) => controller.selectAlgorithm(algo),
-                      ),
-                    )
-                    .toList(),
-              ),
-              const SizedBox(height: 14),
-              _SectionTitle('MQTT 地址配置'),
-              const SizedBox(height: 10),
-              _MqttConfigRow(controller: controller),
-              const SizedBox(height: 12),
-              FilledButton.icon(
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(48),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                ),
-                onPressed: controller.toggleStreaming,
-                icon: Icon(controller.isStreaming ? Icons.pause_rounded : Icons.play_arrow_rounded),
-                label: Text(controller.isStreaming ? '暂停识别流' : '启动识别流'),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 10),
-        ModernCard(
-          borderRadius: BorderRadius.circular(20),
-          child: Row(
-            children: [
-              const Icon(Icons.explore_rounded, color: Colors.amber),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  '重力方向: ${controller.gravitySnapshot.dominantAxis} | '
-                  'g=(${controller.gravitySnapshot.x.toStringAsFixed(1)}, '
-                  '${controller.gravitySnapshot.y.toStringAsFixed(1)}, '
-                  '${controller.gravitySnapshot.z.toStringAsFixed(1)})',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 10),
-        ModernCard(
-          borderRadius: BorderRadius.circular(20),
-          child: _EventBar(event: controller.latestEvent),
-        ),
-      ],
     );
   }
 }
@@ -428,16 +535,27 @@ class _MetricBadge extends StatelessWidget {
   }
 }
 
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle(this.text);
+class _GravityBar extends StatelessWidget {
+  const _GravityBar({required this.controller});
 
-  final String text;
+  final VisionDetectionController controller;
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+    return Row(
+      children: [
+        const Icon(Icons.explore_rounded, color: Colors.amber),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            '重力方向: ${controller.gravitySnapshot.dominantAxis} | '
+            'g=(${controller.gravitySnapshot.x.toStringAsFixed(1)}, '
+            '${controller.gravitySnapshot.y.toStringAsFixed(1)}, '
+            '${controller.gravitySnapshot.z.toStringAsFixed(1)})',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+        ),
+      ],
     );
   }
 }

@@ -74,6 +74,12 @@ class SettingsController extends ChangeNotifier {
     await refreshPermissions();
   }
 
+  /// 请求视觉识别模块依赖权限
+  Future<void> requestVisionPermissions() async {
+    await _permissionService.requestVisionDetectionPermissions();
+    await refreshPermissions();
+  }
+
   /// 打开系统设置
   Future<void> openAppSettings() async {
     await _permissionService.openSettings();

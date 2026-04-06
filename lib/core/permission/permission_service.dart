@@ -24,6 +24,10 @@ enum AppPermission {
 /// 权限服务
 /// 统一管理应用权限请求和检查
 class PermissionService {
+  static const List<AppPermission> visionDetectionRequiredPermissions = [
+    AppPermission.camera,
+  ];
+
   /// 检查单个权限状态
   Future<AppPermissionStatus> checkPermission(AppPermission permission) async {
     final permissionHandler = _mapPermission(permission);
@@ -88,15 +92,24 @@ class PermissionService {
 
   /// 请求跌倒检测所需的所有权限
   Future<Map<AppPermission, AppPermissionStatus>> requestFallDetectionPermissions() async {
-    return requestPermissions([
-      AppPermission.camera,
-    ]);
+    return requestPermissions(visionDetectionRequiredPermissions);
   }
 
   /// 检查跌倒检测权限是否全部授予
   Future<bool> checkFallDetectionPermissions() async {
-    final cameraGranted = await isGranted(AppPermission.camera);
-    return cameraGranted;
+    final statuses = await checkPermissions(visionDetectionRequiredPermissions);
+    return statuses.values.every((status) => status == AppPermissionStatus.granted);
+  }
+
+  /// 请求视觉识别实验台所需权限
+  Future<Map<AppPermission, AppPermissionStatus>> requestVisionDetectionPermissions() async {
+    return requestPermissions(visionDetectionRequiredPermissions);
+  }
+
+  /// 检查视觉识别实验台权限是否全部授予
+  Future<bool> checkVisionDetectionPermissions() async {
+    final statuses = await checkPermissions(visionDetectionRequiredPermissions);
+    return statuses.values.every((status) => status == AppPermissionStatus.granted);
   }
 
   Permission _mapPermission(AppPermission permission) {

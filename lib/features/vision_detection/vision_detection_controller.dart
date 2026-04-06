@@ -120,18 +120,14 @@ class VisionDetectionController extends ChangeNotifier {
   }
 
   Future<void> refreshPermission() async {
-    final statuses = await _permissionService.checkPermissions([
-      AppPermission.camera,
-      AppPermission.sensors,
-    ]);
+    final statuses = await _permissionService.checkPermissions(
+      PermissionService.visionDetectionRequiredPermissions,
+    );
     final camStatus = statuses[AppPermission.camera];
-    final sensorStatus = statuses[AppPermission.sensors];
 
-    if (camStatus == AppPermissionStatus.granted &&
-        sensorStatus == AppPermissionStatus.granted) {
+    if (camStatus == AppPermissionStatus.granted) {
       _permissionState = VisionPermissionState.granted;
-    } else if (camStatus == AppPermissionStatus.permanentlyDenied ||
-        sensorStatus == AppPermissionStatus.permanentlyDenied) {
+    } else if (camStatus == AppPermissionStatus.permanentlyDenied) {
       _permissionState = VisionPermissionState.permanentlyDenied;
     } else {
       _permissionState = VisionPermissionState.denied;
@@ -140,10 +136,7 @@ class VisionDetectionController extends ChangeNotifier {
   }
 
   Future<void> requestPermissions() async {
-    await _permissionService.requestPermissions([
-      AppPermission.camera,
-      AppPermission.sensors,
-    ]);
+    await _permissionService.requestVisionDetectionPermissions();
     await refreshPermission();
     if (_permissionState == VisionPermissionState.granted &&
         _cameraController == null) {
@@ -294,7 +287,7 @@ class VisionDetectionController extends ChangeNotifier {
     if (_permissionState != VisionPermissionState.granted) {
       _latestEvent = VisionEvent(
         title: '权限未就绪',
-        detail: '请先授予摄像头与运动传感器权限。',
+        detail: '请先授予摄像头权限。',
         timestamp: DateTime.now(),
       );
       notifyListeners();
