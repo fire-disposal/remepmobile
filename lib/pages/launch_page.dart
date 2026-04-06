@@ -14,7 +14,7 @@ class _LaunchPageState extends State<LaunchPage> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        context.go('/app/fall-detector');
+        context.go('/app/dashboard');
       }
     });
   }
