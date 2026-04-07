@@ -21,11 +21,11 @@ class DashboardPage extends StatelessWidget {
       description: '通过边缘计算模型进行视觉动作捕捉',
     ),
     _ModuleItem(
-      title: '蓝牙调试工具',
+      title: '蓝牙设备扫描',
       icon: Icons.bluetooth_audio_rounded,
       color: Colors.blueAccent,
-      route: '/app/debug/bluetooth',
-      description: '探测周边 BLE 设备并进行信号调试',
+      route: '/app/bluetooth/scanner',
+      description: '扫描周边 BLE 设备并查看信号强度',
     ),
   ];
 

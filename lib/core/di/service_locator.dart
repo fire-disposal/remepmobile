@@ -1,6 +1,8 @@
 ﻿import 'package:get_it/get_it.dart';
 import '../../features/settings/settings_module.dart';
+import '../../features/bluetooth_scanner/bluetooth_scanner_module.dart';
 import '../../features/vision_detection/vision_detection_controller.dart';
+import '../bluetooth/bluetooth_service.dart';
 import '../mqtt/mqtt_service.dart';
 import '../permission/permission_service.dart';
 import '../storage/cache_service.dart';
@@ -22,6 +24,7 @@ Future<void> setupServiceLocator() async {
   // 2. 注册其他异步或长耗时服务
   getIt.registerLazySingleton<MqttService>(() => MqttService());
   getIt.registerLazySingleton<PermissionService>(() => PermissionService());
+  getIt.registerLazySingleton<BluetoothService>(() => BluetoothService());
   getIt.registerFactory<VisionDetectionController>(
     () => VisionDetectionController(
       mqttService: getIt<MqttService>(),
@@ -34,6 +37,7 @@ Future<void> setupServiceLocator() async {
   
   // 4. 注册业务功能模块的依赖项 (Feature DI)
   SettingsModule.registerDependencies(getIt);
+  BluetoothScannerModule.registerDependencies(getIt);
   
   // 等待所有异步单例就绪（如果有使用 registerSingletonAsync）
   await getIt.allReady();
