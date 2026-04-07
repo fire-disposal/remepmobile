@@ -18,38 +18,39 @@ class SensorDataCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     
-    return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.show_chart,
-                  color: theme.colorScheme.primary,
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.show_chart,
+                color: theme.colorScheme.primary,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '实时波形',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  '实时波形',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const Spacer(),
-                _buildLegend(),
-              ],
-            ),
-            const SizedBox(height: 16),
-            if (isCompact) ...[
-              _buildCompactWaveforms(),
-            ] else ...[
-              _buildFullWaveforms(),
+              ),
+              const Spacer(),
+              _buildLegend(),
             ],
+          ),
+          const SizedBox(height: 12),
+          if (isCompact) ...[
+            _buildCompactWaveforms(),
+          ] else ...[
+            _buildFullWaveforms(),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -278,44 +279,45 @@ class OrientationSphereCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     
-    return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.threed_rotation,
-                  color: theme.colorScheme.primary,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  '3D方向',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            AspectRatio(
-              aspectRatio: 1,
-              child: CustomPaint(
-                size: Size.infinite,
-                painter: OrientationSpherePainter(
-                  data: data,
-                  primaryColor: theme.colorScheme.primary,
-                  secondaryColor: theme.colorScheme.secondary,
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.threed_rotation,
+                color: theme.colorScheme.primary,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '3D方向',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
                 ),
               ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          AspectRatio(
+            aspectRatio: 1.2,
+            child: CustomPaint(
+              size: Size.infinite,
+              painter: OrientationSpherePainter(
+                data: data,
+                primaryColor: theme.colorScheme.primary,
+                secondaryColor: theme.colorScheme.secondary,
+              ),
             ),
-            const SizedBox(height: 8),
-            _buildOrientationInfo(),
-          ],
-        ),
+          ),
+          const SizedBox(height: 6),
+          _buildOrientationInfo(),
+        ],
       ),
     );
   }
@@ -461,103 +463,122 @@ class MotionStatusCard extends StatelessWidget {
     final theme = Theme.of(context);
     final isAlert = motionType == MotionType.fall || motionType == MotionType.freeFall;
     
-    return Card(
-      elevation: isAlert ? 4 : 2,
-      color: isAlert ? Colors.red.shade50 : null,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.sensors,
-                  color: isAlert ? Colors.red : theme.colorScheme.primary,
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isAlert ? Colors.red.shade50 : null,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isAlert ? Colors.red.withValues(alpha: 0.35) : Colors.grey.withValues(alpha: 0.2),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.sensors,
+                color: isAlert ? Colors.red : theme.colorScheme.primary,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '运动检测',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  '运动检测',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
+              ),
+              if (isAlert) ...[
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.red,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Text(
+                    '警报',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
-                if (isAlert) ...[
-                  const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.red,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Text(
-                      '警报',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
               ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  flex: 2,
-                  child: AspectRatio(
-                    aspectRatio: 1,
-                    child: CustomPaint(
-                      size: Size.infinite,
-                      painter: MotionIndicatorPainter(
-                        motionType: motionType,
-                        confidence: confidence,
-                      ),
-                    ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isNarrow = constraints.maxWidth < 520;
+              final indicator = SizedBox(
+                width: isNarrow ? 90 : 120,
+                height: isNarrow ? 90 : 120,
+                child: CustomPaint(
+                  size: Size.infinite,
+                  painter: MotionIndicatorPainter(
+                    motionType: motionType,
+                    confidence: confidence,
                   ),
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  flex: 3,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: _statusColor.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: _statusColor.withValues(alpha: 0.3),
+              );
+
+              final detail = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: _statusColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: _statusColor.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(_statusIcon, color: _statusColor, size: 18),
+                        const SizedBox(width: 6),
+                        Text(
+                          _statusText,
+                          style: TextStyle(
+                            color: _statusColor,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
                           ),
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(_statusIcon, color: _statusColor, size: 20),
-                            const SizedBox(width: 8),
-                            Text(
-                              _statusText,
-                              style: TextStyle(
-                                color: _statusColor,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      _buildRecentEvents(),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ],
-        ),
+                  const SizedBox(height: 10),
+                  _buildRecentEvents(),
+                ],
+              );
+
+              if (isNarrow) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    indicator,
+                    const SizedBox(height: 8),
+                    detail,
+                  ],
+                );
+              }
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  indicator,
+                  const SizedBox(width: 12),
+                  Expanded(child: detail),
+                ],
+              );
+            },
+          ),
+        ],
       ),
     );
   }
@@ -589,11 +610,14 @@ class MotionStatusCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              Text(
-                _getEventName(event.type),
-                style: const TextStyle(fontSize: 11),
+              Expanded(
+                child: Text(
+                  _getEventName(event.type),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 11),
+                ),
               ),
-              const Spacer(),
               Text(
                 _formatTime(event.timestamp),
                 style: TextStyle(

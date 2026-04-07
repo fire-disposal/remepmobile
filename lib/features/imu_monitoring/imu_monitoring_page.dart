@@ -121,24 +121,43 @@ class _ImuMonitoringPageState extends State<ImuMonitoringPage>
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      flex: 3,
-                      child: SensorDataCard(
-                        data: _controller.dataHistory.data,
-                        isCompact: true,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      flex: 2,
-                      child: OrientationSphereCard(
-                        data: state.latestData,
-                      ),
-                    ),
-                  ],
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    if (constraints.maxWidth < 900) {
+                      return Column(
+                        children: [
+                          SensorDataCard(
+                            data: _controller.dataHistory.data,
+                            isCompact: true,
+                          ),
+                          const SizedBox(height: 12),
+                          OrientationSphereCard(
+                            data: state.latestData,
+                          ),
+                        ],
+                      );
+                    }
+
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: SensorDataCard(
+                            data: _controller.dataHistory.data,
+                            isCompact: true,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          flex: 2,
+                          child: OrientationSphereCard(
+                            data: state.latestData,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ),
             ),
@@ -236,62 +255,94 @@ class _ImuMonitoringPageState extends State<ImuMonitoringPage>
       return const SizedBox.shrink();
     }
 
-    return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _StatItem(
-              label: '加速度均值',
-              value: '${statistics['accelMean']?.toStringAsFixed(2) ?? '--'}',
-              unit: 'm/s²',
-              color: Colors.blue,
-            ),
-            _StatItem(
-              label: '方差',
-              value: '${statistics['accelStd']?.toStringAsFixed(2) ?? '--'}',
-              unit: '',
-              color: Colors.orange,
-            ),
-            _StatItem(
-              label: '最大值',
-              value: '${statistics['accelMax']?.toStringAsFixed(2) ?? '--'}',
-              unit: 'm/s²',
-              color: Colors.red,
-            ),
-          ],
-        ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.grey.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _StatItem(
+            label: '加速度均值',
+            value: '${statistics['accelMean']?.toStringAsFixed(2) ?? '--'}',
+            unit: 'm/s²',
+            color: Colors.blue,
+          ),
+          _StatItem(
+            label: '方差',
+            value: '${statistics['accelStd']?.toStringAsFixed(2) ?? '--'}',
+            unit: '',
+            color: Colors.orange,
+          ),
+          _StatItem(
+            label: '最大值',
+            value: '${statistics['accelMax']?.toStringAsFixed(2) ?? '--'}',
+            unit: 'm/s²',
+            color: Colors.red,
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildRawDataCard(IMUSensorData data) {
-    return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              '传感器数据',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _DataRow(label: 'Accel', x: data.accelX, y: data.accelY, z: data.accelZ, unit: 'm/s²'),
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.22)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            '传感器数据',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          ),
+          const SizedBox(height: 10),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isNarrow = constraints.maxWidth < 460;
+              final children = [
+                _DataRow(
+                  label: 'Accel',
+                  x: data.accelX,
+                  y: data.accelY,
+                  z: data.accelZ,
+                  unit: 'm/s²',
                 ),
-                Expanded(
-                  child: _DataRow(label: 'Gyro', x: data.gyroX, y: data.gyroY, z: data.gyroZ, unit: 'rad/s'),
+                _DataRow(
+                  label: 'Gyro',
+                  x: data.gyroX,
+                  y: data.gyroY,
+                  z: data.gyroZ,
+                  unit: 'rad/s',
                 ),
-              ],
-            ),
-          ],
-        ),
+              ];
+
+              if (isNarrow) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    children[0],
+                    const SizedBox(height: 8),
+                    children[1],
+                  ],
+                );
+              }
+
+              return Row(
+                children: [
+                  Expanded(child: children[0]),
+                  const SizedBox(width: 16),
+                  Expanded(child: children[1]),
+                ],
+              );
+            },
+          ),
+        ],
       ),
     );
   }
@@ -321,7 +372,9 @@ class _DataRow extends StatelessWidget {
   Widget _ValueText(String axis, double value, Color color) {
     return Text(
       '$axis: ${value.toStringAsFixed(2)} $unit',
-      style: TextStyle(fontSize: 12, color: color, fontFamily: 'monospace'),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(fontSize: 11, color: color, fontFamily: 'monospace'),
     );
   }
 }
