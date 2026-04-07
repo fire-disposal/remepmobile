@@ -15,6 +15,7 @@ class _BluetoothDebugPageState extends State<BluetoothDebugPage> {
   final _bluetoothService = getIt<BluetoothService>();
   bool _isScanning = false;
   List<ble.ScanResult> _scanResults = [];
+  bool _onlyConnectable = false;
   
   @override
   void initState() {
@@ -58,6 +59,9 @@ class _BluetoothDebugPageState extends State<BluetoothDebugPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final visibleDevices = _onlyConnectable
+        ? _scanResults.where((item) => item.advertisementData.connectable).toList()
+        : _scanResults;
 
     return Scaffold(
       appBar: AppBar(
@@ -80,17 +84,17 @@ class _BluetoothDebugPageState extends State<BluetoothDebugPage> {
         children: [
           _buildHeader(colorScheme, theme),
           Expanded(
-            child: _scanResults.isEmpty
+            child: visibleDevices.isEmpty
                 ? const EmptyState(
                     icon: Icons.bluetooth_searching_rounded,
                     title: '未发现设备',
                     subtitle: '点击下方按钮开始扫描周边的蓝牙 BLE 设备',
                   )
                 : ListView.separated(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _scanResults.length,
-                    separatorBuilder: (context, index) => const SizedBox(height: 12),
-                    itemBuilder: (context, index) => _buildDeviceCard(_scanResults[index], colorScheme, theme),
+                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 80),
+                    itemCount: visibleDevices.length,
+                    separatorBuilder: (context, index) => const SizedBox(height: 8),
+                    itemBuilder: (context, index) => _buildDeviceCard(visibleDevices[index], colorScheme, theme),
                   ),
           ),
         ],
@@ -104,29 +108,79 @@ class _BluetoothDebugPageState extends State<BluetoothDebugPage> {
   }
 
   Widget _buildHeader(ColorScheme colorScheme, ThemeData theme) {
+    final connectableCount = _scanResults.where((result) => result.advertisementData.connectable).length;
+
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
       color: colorScheme.surfaceVariant.withOpacity(0.3),
-      child: Row(
+      child: Column(
         children: [
-          CircleAvatar(
-            backgroundColor: colorScheme.primaryContainer,
-            child: Icon(Icons.bug_report_rounded, color: colorScheme.onPrimaryContainer),
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 16,
+                backgroundColor: colorScheme.primaryContainer,
+                child: Icon(Icons.bug_report_rounded, size: 16, color: colorScheme.onPrimaryContainer),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('设备列表', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+                    Text('共 ${_scanResults.length} 台，支持连接 $connectableCount 台', style: theme.textTheme.labelMedium),
+                  ],
+                ),
+              ),
+              IconButton.filledTonal(
+                visualDensity: VisualDensity.compact,
+                onPressed: () => BluetoothPickerSheet.show(context),
+                icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                tooltip: '测试组件版',
+              ),
+            ],
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('设备列表', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-                Text('共发现 ${_scanResults.length} 个活跃设备', style: theme.textTheme.bodySmall),
-              ],
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              FilterChip(
+                label: const Text('仅可连接设备'),
+                selected: _onlyConnectable,
+                onSelected: (value) => setState(() => _onlyConnectable = value),
+                visualDensity: VisualDensity.compact,
+              ),
+              const SizedBox(width: 8),
+              _buildStatusPill(
+                _isScanning ? '扫描中' : '空闲',
+                _isScanning ? Icons.radar_rounded : Icons.check_circle_outline_rounded,
+                _isScanning ? colorScheme.primary : colorScheme.outline,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusPill(String label, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
             ),
-          ),
-          IconButton.filledTonal(
-            onPressed: () => BluetoothPickerSheet.show(context),
-            icon: const Icon(Icons.open_in_new_rounded),
-            tooltip: '测试组件版',
           ),
         ],
       ),
@@ -136,27 +190,56 @@ class _BluetoothDebugPageState extends State<BluetoothDebugPage> {
   Widget _buildDeviceCard(ble.ScanResult result, ColorScheme colorScheme, ThemeData theme) {
     final device = result.device;
     final name = device.platformName.isEmpty ? '未知设备' : device.platformName;
-    
+
     return ModernCard(
       onTap: () => _showDeviceDetails(result),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         child: Row(
           children: [
             _buildSignalIndicator(result.rssi, colorScheme),
-            const SizedBox(width: 16),
+            const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(name, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-                  Text(device.remoteId.str, style: theme.textTheme.labelSmall?.copyWith(color: colorScheme.outline)),
+                  Text(
+                    name,
+                    style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    device.remoteId.str,
+                    style: theme.textTheme.labelSmall?.copyWith(color: colorScheme.outline),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ],
               ),
             ),
-            Icon(Icons.chevron_right_rounded, color: colorScheme.outline),
-          ],
-        ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: result.advertisementData.connectable
+                    ? colorScheme.primaryContainer
+                    : colorScheme.surfaceVariant,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                result.advertisementData.connectable ? '可连接' : '仅广播',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: result.advertisementData.connectable
+                      ? colorScheme.onPrimaryContainer
+                      : colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
