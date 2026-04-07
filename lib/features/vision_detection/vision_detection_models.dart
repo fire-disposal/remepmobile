@@ -120,6 +120,52 @@ enum VisionAlgorithmType {
   };
 }
 
+/// 视觉输出形态（决定绘制方式）
+enum VisionOutputKind {
+  keypoints,
+  detectionBox,
+}
+
+/// 模型运行画像：将模型、算法和绘制绑定在一起
+class VisionPipelineProfile {
+  final VisionModelType model;
+  final VisionAlgorithmType algorithm;
+  final VisionOutputKind outputKind;
+
+  const VisionPipelineProfile({
+    required this.model,
+    required this.algorithm,
+    required this.outputKind,
+  });
+
+  String get shortLabel => '${model.shortLabel}/${algorithm.shortLabel}';
+
+  String get description => switch (outputKind) {
+    VisionOutputKind.keypoints => '关键点模型：使用${algorithm.label}，显示骨架关键点',
+    VisionOutputKind.detectionBox => '识别框模型：使用${algorithm.label}，显示检测框',
+  };
+}
+
+extension VisionModelProfileX on VisionModelType {
+  /// 模型绑定算法，不再独立选择
+  VisionAlgorithmType get boundAlgorithm => switch (this) {
+    VisionModelType.builtinPersonFast || VisionModelType.poseNano => VisionAlgorithmType.keypointRelation,
+    VisionModelType.personDetectorLite || VisionModelType.bodyKeypointLite => VisionAlgorithmType.bboxTrend,
+  };
+
+  /// 模型绑定输出形态（决定绘制方式）
+  VisionOutputKind get outputKind => switch (this) {
+    VisionModelType.builtinPersonFast || VisionModelType.poseNano => VisionOutputKind.keypoints,
+    VisionModelType.personDetectorLite || VisionModelType.bodyKeypointLite => VisionOutputKind.detectionBox,
+  };
+
+  VisionPipelineProfile get pipeline => VisionPipelineProfile(
+        model: this,
+        algorithm: boundAlgorithm,
+        outputKind: outputKind,
+      );
+}
+
 enum VisionPermissionState {
   unknown,
   granted,

@@ -48,7 +48,7 @@ class VisionDetectionController extends ChangeNotifier {
   bool _isFrameBeingProcessed = false;
 
   VisionModelType _selectedModel = VisionModelType.builtinPersonFast;
-  VisionAlgorithmType _selectedAlgorithm = VisionAlgorithmType.keypointRelation;
+  VisionAlgorithmType _selectedAlgorithm = VisionModelType.builtinPersonFast.boundAlgorithm;
   VisionPermissionState _permissionState = VisionPermissionState.unknown;
   // 固定重力方向为正常竖屏状态（Z轴向下）
   // 旋转功能已禁用，由系统控制屏幕方向
@@ -179,6 +179,7 @@ class VisionDetectionController extends ChangeNotifier {
   bool get isInitializing => _isInitializing;
   bool get isStreaming => _isStreaming;
   VisionModelType get selectedModel => _selectedModel;
+  VisionPipelineProfile get selectedPipeline => _selectedModel.pipeline;
   VisionAlgorithmType get selectedAlgorithm => _selectedAlgorithm;
   VisionPermissionState get permissionState => _permissionState;
   GravitySnapshot get gravitySnapshot => _gravitySnapshot;
@@ -786,7 +787,7 @@ class VisionDetectionController extends ChangeNotifier {
     _lastFrameTime = null;
     _latestEvent = VisionEvent(
       title: '视频流启动',
-      detail: '模型 ${_selectedModel.label} + 算法 ${_selectedAlgorithm.label} 已激活。',
+      detail: '流水线 ${selectedPipeline.shortLabel} 已激活。',
       timestamp: DateTime.now(),
     );
     notifyListeners();
@@ -863,21 +864,8 @@ class VisionDetectionController extends ChangeNotifier {
     }
 
     try {
-      // 根据输出形状准备输出缓冲区
-      // MoveNet Lightning: [1, 17, 3]
-      late final List<dynamic> outputBuffer;
-      
-      if (_outputShape.length == 3 && _outputShape[1] == 17 && _outputShape[2] == 3) {
-        // MoveNet 输出格式: [1, 17, 3] - 每个点是 [y, x, confidence]
-        outputBuffer = List.generate(1, (_) => 
-          List.generate(17, (_) => List<double>.filled(3, 0.0))
-        );
-      } else {
-        // 通用输出格式
-        outputBuffer = List.generate(_outputShape[0], (_) => 
-          List.generate(_outputShape.length > 1 ? _outputShape[1] : 1, (_) => 0.0)
-        );
-      }
+      // 根据shape动态构造输出缓冲区，兼容内置MoveNet与检测模型
+      final outputBuffer = _createTensorBuffer(_outputShape);
 
       // 运行推理
       AppLogger.debug('Running inference with input type: ${_inputTypeCode == 0 ? "uint8" : "float32"}');
@@ -984,6 +972,18 @@ class VisionDetectionController extends ChangeNotifier {
     }
   }
 
+  /// 按 tensor shape 递归创建输出缓冲
+  dynamic _createTensorBuffer(List<int> shape, {int depth = 0}) {
+    if (shape.isEmpty) return 0.0;
+    if (depth >= shape.length - 1) {
+      return List<double>.filled(shape[depth], 0.0);
+    }
+    return List.generate(
+      shape[depth],
+      (_) => _createTensorBuffer(shape, depth: depth + 1),
+    );
+  }
+
   /// 后处理：解析TFLite模型输出为检测框
   /// 
   /// 支持的模型输出格式：
@@ -996,13 +996,9 @@ class VisionDetectionController extends ChangeNotifier {
     try {
       final outputShape = _outputShape;
       
-      // MoveNet Lightning: [1, 17, 3] - 17个COCO关键点
-      // 内置模型和 poseNano 都使用 MoveNet 后处理
-      if ((_selectedModel == VisionModelType.poseNano || 
-           _selectedModel == VisionModelType.builtinPersonFast) && 
-          outputShape.length == 3 && 
-          outputShape[1] == 17 && 
-          outputShape[2] == 3) {
+      // 关键点流水线：兼容 MoveNet 的 [1,17,3] 与 [1,1,17,3]
+      if (_selectedModel.outputKind == VisionOutputKind.keypoints &&
+          _looksLikeMoveNetShape(outputShape)) {
         return _postprocessMoveNetOutput(output);
       }
       
@@ -1063,6 +1059,16 @@ class VisionDetectionController extends ChangeNotifier {
     return detections;
   }
 
+  bool _looksLikeMoveNetShape(List<int> shape) {
+    if (shape.length == 3) {
+      return shape[1] == 17 && shape[2] == 3;
+    }
+    if (shape.length == 4) {
+      return shape[1] == 1 && shape[2] == 17 && shape[3] == 3;
+    }
+    return false;
+  }
+
   /// 解析MoveNet Lightning输出
   /// 
   /// MoveNet输出17个COCO格式关键点：
@@ -1085,8 +1091,14 @@ class VisionDetectionController extends ChangeNotifier {
     ];
     
     try {
-      // MoveNet输出: [1, 17, 3]
-      final keypoints = output[0] as List<dynamic>;
+      // MoveNet输出: [1, 17, 3] 或 [1, 1, 17, 3]
+      final raw = output[0];
+      final keypoints = (raw is List &&
+              raw.isNotEmpty &&
+              raw.first is List &&
+              (raw.first as List).length == 17)
+          ? raw.first as List<dynamic>
+          : raw as List<dynamic>;
       
       double minX = 1.0, minY = 1.0;
       double maxX = 0.0, maxY = 0.0;
@@ -1256,8 +1268,9 @@ class VisionDetectionController extends ChangeNotifier {
     };
   }
 
-  // 算法参数
-  AlgorithmParams _algorithmParams = AlgorithmParams.defaultFor(VisionAlgorithmType.keypointRelation);
+  // 算法参数（由模型绑定算法驱动）
+  AlgorithmParams _algorithmParams =
+      AlgorithmParams.defaultFor(VisionModelType.builtinPersonFast.boundAlgorithm);
 
   void _evaluateEvent() {
     if (_detections.isEmpty) {
@@ -1445,9 +1458,15 @@ class VisionDetectionController extends ChangeNotifier {
     }
 
     _selectedModel = model;
+    final nextAlgorithm = model.boundAlgorithm;
+    if (_selectedAlgorithm != nextAlgorithm) {
+      _selectedAlgorithm = nextAlgorithm;
+      _algorithmParams = AlgorithmParams.defaultFor(nextAlgorithm);
+      _history.clear();
+    }
     _latestEvent = VisionEvent(
-      title: '模型切换中',
-      detail: '正在加载 ${model.label}...',
+      title: '流水线切换中',
+      detail: '正在切换到 ${model.pipeline.shortLabel}...',
       timestamp: DateTime.now(),
     );
     notifyListeners();
@@ -1457,8 +1476,8 @@ class VisionDetectionController extends ChangeNotifier {
       await _loadModel(model);
     } else {
       _latestEvent = VisionEvent(
-        title: '模型已选择',
-        detail: '${model.label} 将在启动识别流时加载。',
+        title: '流水线已选择',
+        detail: '${model.pipeline.description}，将在启动识别流时加载。',
         timestamp: DateTime.now(),
       );
       notifyListeners();
@@ -1470,40 +1489,22 @@ class VisionDetectionController extends ChangeNotifier {
     await _loadModel(_selectedModel);
   }
 
-  /// 选择算法，支持配置参数
+  /// 兼容层：算法切换已废弃，算法与模型绑定
   void selectAlgorithm(VisionAlgorithmType algorithm, {AlgorithmParams? params}) {
-    if (_selectedAlgorithm == algorithm) {
-      // 相同算法，只更新参数
-      if (params != null) {
-        _algorithmParams = params;
-        _latestEvent = VisionEvent(
-          title: '算法参数更新',
-          detail: '${algorithm.label} 参数已调整',
-          timestamp: DateTime.now(),
-        );
-        notifyListeners();
-      }
+    if (_selectedAlgorithm != algorithm) {
+      _latestEvent = VisionEvent(
+        title: '算法已绑定模型',
+        detail: '当前版本不可单独切换算法，请切换模型。',
+        timestamp: DateTime.now(),
+        level: VisionEventLevel.warning,
+      );
+      notifyListeners();
       return;
     }
 
-    _selectedAlgorithm = algorithm;
     if (params != null) {
       _algorithmParams = params;
-    } else {
-      // 使用算法默认参数
-      _algorithmParams = AlgorithmParams.defaultFor(algorithm);
     }
-    
-    // 清空历史记录以重新开始评估
-    _history.clear();
-    
-    _latestEvent = VisionEvent(
-      title: '算法已切换',
-      detail: '当前算法：${algorithm.label}\n'
-              '关键点置信度: ${_algorithmParams.keypointConfidenceThreshold.toStringAsFixed(2)}, '
-              '时间窗: ${_algorithmParams.timeWindowMs}ms',
-      timestamp: DateTime.now(),
-    );
     notifyListeners();
   }
 
