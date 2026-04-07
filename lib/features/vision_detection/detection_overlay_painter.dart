@@ -9,9 +9,10 @@ import 'vision_detection_models.dart';
 /// - 关键点（圆点）
 /// - 骨架连接线
 class DetectionOverlayPainter extends CustomPainter {
-  DetectionOverlayPainter(this.boxes);
+  DetectionOverlayPainter(this.boxes, {required this.outputKind});
 
   final List<DetectionBox> boxes;
+  final VisionOutputKind outputKind;
 
   // COCO格式的骨架连接定义（基于17个关键点）
   // 格式: [起点索引, 终点索引]
@@ -52,13 +53,11 @@ class DetectionOverlayPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
 
     for (final box in boxes) {
-      // 优先绘制关键点（MoveNet等姿态模型）
-      if (box.hasKeyPoints) {
+      // 绘制方式由模型绑定的输出形态决定
+      if (outputKind == VisionOutputKind.keypoints && box.hasKeyPoints) {
         _drawKeyPoints(canvas, size, box.keyPoints!);
-        // 有关键点的模型不绘制检测框，只显示标签
         _drawLabelOnly(canvas, size, box);
       } else {
-        // 没有关键点的模型（备用模式）绘制检测框
         _drawDetectionBox(canvas, size, box, borderPaint, fillPaint);
       }
     }
@@ -252,6 +251,6 @@ class DetectionOverlayPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant DetectionOverlayPainter oldDelegate) {
-    return oldDelegate.boxes != boxes;
+    return oldDelegate.boxes != boxes || oldDelegate.outputKind != outputKind;
   }
 }

@@ -156,7 +156,7 @@ class _VisionDetectionPageState extends State<VisionDetectionPage> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('算法配置', style: Theme.of(context).textTheme.titleMedium),
+                  Text('流水线参数', style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 12),
                   // 使用 Flexible + SingleChildScrollView 支持内容滚动
                   Flexible(
@@ -165,27 +165,7 @@ class _VisionDetectionPageState extends State<VisionDetectionPage> {
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // 算法选择
-                          Text('检测算法', style: Theme.of(context).textTheme.bodySmall),
-                          const SizedBox(height: 6),
-                          SegmentedButton<VisionAlgorithmType>(
-                            showSelectedIcon: false,
-                            segments: VisionAlgorithmType.values
-                                .map((algo) => ButtonSegment<VisionAlgorithmType>(
-                                      value: algo, 
-                                      label: Text(algo.label, style: const TextStyle(fontSize: 12)),
-                                    ))
-                                .toList(),
-                            selected: <VisionAlgorithmType>{_controller.selectedAlgorithm},
-                            onSelectionChanged: (selection) {
-                              if (selection.isEmpty) return;
-                              _controller.selectAlgorithm(selection.first);
-                            },
-                          ),
-                          
-                          const SizedBox(height: 16),
-                          
-                          // 当前算法描述
+                          // 当前绑定算法描述
                           Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
@@ -200,7 +180,7 @@ class _VisionDetectionPageState extends State<VisionDetectionPage> {
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
-                                    _controller.selectedAlgorithm.description,
+                                    _controller.selectedPipeline.description,
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: Theme.of(context).colorScheme.onPrimaryContainer,
@@ -348,7 +328,10 @@ class _CameraWorkbench extends StatelessWidget {
         // 检测框和关键点绘制层
         RepaintBoundary(
           child: CustomPaint(
-            painter: DetectionOverlayPainter(controller.detections),
+            painter: DetectionOverlayPainter(
+              controller.detections,
+              outputKind: controller.selectedPipeline.outputKind,
+            ),
           ),
         ),
         
@@ -489,7 +472,7 @@ class _CameraWorkbench extends StatelessWidget {
         const Spacer(),
         // 模型信息放在同一行右侧
         _MetricBadge(
-          text: '${controller.selectedModel.shortLabel} · ${controller.selectedAlgorithm.shortLabel}',
+          text: controller.selectedPipeline.shortLabel,
           color: Colors.orangeAccent,
           icon: Icons.memory,
           compact: true,
@@ -770,7 +753,7 @@ class _CompactModelTile extends StatelessWidget {
             Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                manifest.type.description,
+                '${manifest.type.description} · ${manifest.type.pipeline.algorithm.label}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodySmall,
@@ -1044,7 +1027,7 @@ class _AlgorithmParamsPanelState extends State<_AlgorithmParamsPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final isKeypointAlgo = widget.controller.selectedAlgorithm == VisionAlgorithmType.keypointRelation;
+    final isKeypointAlgo = widget.controller.selectedPipeline.algorithm == VisionAlgorithmType.keypointRelation;
     
     return Column(
       mainAxisSize: MainAxisSize.min,
