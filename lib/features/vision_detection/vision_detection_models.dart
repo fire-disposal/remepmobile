@@ -83,6 +83,17 @@ class AlgorithmParams {
   }
 }
 
+enum VisionDetectionMode {
+  balanced('平衡', '通用场景，稳定与灵敏度均衡'),
+  performance('流畅优先', '减少处理负载，优先保证画面流畅'),
+  sensitive('灵敏', '提升跌倒捕捉灵敏度，适合高风险场景');
+
+  final String label;
+  final String description;
+
+  const VisionDetectionMode(this.label, this.description);
+}
+
 enum VisionModelType {
   builtinPersonFast('MoveNet (内置)', '内置轻量姿态模型，17个关键点，无需下载', Colors.lightBlue),
   poseNano('MoveNet Lightning', 'Google官方轻量姿态模型，17个关键点', Colors.teal),
@@ -118,6 +129,50 @@ enum VisionAlgorithmType {
     VisionAlgorithmType.keypointRelation => 'KeyRel',
     VisionAlgorithmType.bboxTrend => 'BBox',
   };
+}
+
+extension VisionDetectionModePresetX on VisionDetectionMode {
+  AlgorithmParams presetFor(VisionAlgorithmType algorithm) {
+    return switch ((this, algorithm)) {
+      (VisionDetectionMode.performance, VisionAlgorithmType.keypointRelation) =>
+        const AlgorithmParams(
+          keypointConfidenceThreshold: 0.4,
+          timeWindowMs: 1800,
+          fallAngleThreshold: 68.0,
+          aspectRatioThreshold: 1.2,
+          verticalSpeedThreshold: 0.35,
+          minKeyPoints: 9,
+        ),
+      (VisionDetectionMode.performance, VisionAlgorithmType.bboxTrend) =>
+        const AlgorithmParams(
+          keypointConfidenceThreshold: 0.35,
+          timeWindowMs: 2200,
+          fallAngleThreshold: 70.0,
+          aspectRatioThreshold: 1.15,
+          verticalSpeedThreshold: 0.45,
+          minKeyPoints: 6,
+        ),
+      (VisionDetectionMode.sensitive, VisionAlgorithmType.keypointRelation) =>
+        const AlgorithmParams(
+          keypointConfidenceThreshold: 0.22,
+          timeWindowMs: 1200,
+          fallAngleThreshold: 52.0,
+          aspectRatioThreshold: 1.15,
+          verticalSpeedThreshold: 0.25,
+          minKeyPoints: 6,
+        ),
+      (VisionDetectionMode.sensitive, VisionAlgorithmType.bboxTrend) =>
+        const AlgorithmParams(
+          keypointConfidenceThreshold: 0.25,
+          timeWindowMs: 1500,
+          fallAngleThreshold: 65.0,
+          aspectRatioThreshold: 0.92,
+          verticalSpeedThreshold: 0.28,
+          minKeyPoints: 5,
+        ),
+      _ => AlgorithmParams.defaultFor(algorithm),
+    };
+  }
 }
 
 /// 视觉输出形态（决定绘制方式）

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/di/service_locator.dart';
 import '../../../../core/theme/theme.dart';
 import '../../../../core/permission/permission_service.dart';
+import '../../../vision_detection/vision_detection_models.dart';
 import '../controllers/settings_controller.dart';
 
 /// 设置页面 - 包含权限管理调试功能
@@ -47,6 +48,18 @@ class SettingsPage extends StatelessWidget {
 
               _buildSectionHeader(context, '权限管理'),
               ...AppPermission.values.map((p) => _buildPermissionTile(context, controller, p, state.permissions[p])),
+
+              _buildSectionHeader(context, '模型文件管理'),
+              ListTile(
+                leading: const Icon(Icons.model_training_outlined),
+                title: const Text('刷新模型状态'),
+                subtitle: const Text('下载/解压后的模型会写入本地，视觉页只允许切换已就绪模型。'),
+                trailing: const Icon(Icons.refresh),
+                onTap: () => controller.refreshModelManagement(),
+              ),
+              ...controller.visionController.modelStates.map(
+                (item) => _buildModelTile(context, controller, item),
+              ),
               
               const Divider(),
               ListTile(
@@ -129,6 +142,50 @@ class SettingsPage extends StatelessWidget {
           status,
           isBluetooth: isBluetooth,
         ),
+      ),
+    );
+  }
+
+  Widget _buildModelTile(
+    BuildContext context,
+    SettingsController controller,
+    ModelRuntimeState state,
+  ) {
+    final model = state.manifest.type;
+    final isBuiltIn = state.manifest.builtIn;
+    return ListTile(
+      dense: true,
+      leading: Icon(
+        Icons.memory_rounded,
+        color: model.accent,
+      ),
+      title: Text(model.label),
+      subtitle: Text(
+        '${model.description}\n${state.isDownloaded || isBuiltIn ? "已就绪" : "未下载"} · ${state.manifest.sizeLabel}',
+      ),
+      isThreeLine: true,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (state.isDownloading)
+            SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(value: state.progress, strokeWidth: 2),
+            ),
+          if (!isBuiltIn) ...[
+            IconButton(
+              tooltip: state.isDownloaded ? '重新下载' : '下载',
+              onPressed: state.isDownloading ? null : () => controller.downloadModel(model),
+              icon: const Icon(Icons.download_rounded),
+            ),
+            IconButton(
+              tooltip: '删除',
+              onPressed: state.isDownloading || !state.isDownloaded ? null : () => controller.removeModel(model),
+              icon: const Icon(Icons.delete_outline_rounded),
+            ),
+          ],
+        ],
       ),
     );
   }

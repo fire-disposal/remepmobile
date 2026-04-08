@@ -25,7 +25,7 @@ Future<void> setupServiceLocator() async {
   getIt.registerLazySingleton<MqttService>(() => MqttService());
   getIt.registerLazySingleton<PermissionService>(() => PermissionService());
   getIt.registerLazySingleton<BluetoothService>(() => BluetoothService());
-  getIt.registerFactory<VisionDetectionController>(
+  getIt.registerLazySingleton<VisionDetectionController>(
     () => VisionDetectionController(
       mqttService: getIt<MqttService>(),
       permissionService: getIt<PermissionService>(),

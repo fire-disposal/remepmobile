@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:archive/archive_io.dart';
 import 'package:camera/camera.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -58,7 +59,11 @@ class VisionDetectionController extends ChangeNotifier {
   String _mqttBroker = 'broker.hivemq.com';
   int _mqttPort = 1883;
   int _fps = 0;
+  int _inferenceFps = 0;
   DateTime? _lastFrameTime;
+  DateTime? _lastInferenceFrameTime;
+  DateTime? _lastUiNotifyTime;
+  DateTime? _lastInferenceStartedAt;
   int _processingLatencyMs = 0;
   bool _fallAlarmOn = false;
   double? _previousLumaMean;
@@ -73,6 +78,7 @@ class VisionDetectionController extends ChangeNotifier {
   List<int> _outputShape = [];
   bool _isModelLoading = false;
   String? _modelLoadError;
+  VisionDetectionMode _detectionMode = VisionDetectionMode.balanced;
 
   /// 模型清单配置
   /// 
@@ -189,12 +195,14 @@ class VisionDetectionController extends ChangeNotifier {
   String get mqttBroker => _mqttBroker;
   int get mqttPort => _mqttPort;
   int get fps => _fps;
+  int get inferenceFps => _inferenceFps;
   int get processingLatencyMs => _processingLatencyMs;
   bool get fallAlarmOn => _fallAlarmOn;
   List<ModelRuntimeState> get modelStates =>
       _manifests.map((m) => _modelStates[m.type]!).toList(growable: false);
   bool get isModelLoading => _isModelLoading;
   String? get modelLoadError => _modelLoadError;
+  VisionDetectionMode get detectionMode => _detectionMode;
   
   /// 当前加载的模型是否就绪
   bool get isModelReady => _interpreter != null && _loadedInterpreterModel == _selectedModel;
@@ -278,6 +286,8 @@ class VisionDetectionController extends ChangeNotifier {
     }
     notifyListeners();
   }
+
+  Future<void> refreshModelStates() => _refreshModelStates();
 
   /// 加载TFLite模型到Interpreter
   Future<void> _loadModel(VisionModelType model) async {
@@ -516,9 +526,14 @@ class VisionDetectionController extends ChangeNotifier {
           },
         );
 
+        final preparedPath = await _prepareDownloadedModelFile(
+          tempFilePath: tempFilePath,
+          expectedOutputPath: finalFilePath,
+        );
+
         // 验证下载的文件
         final validation = await _validateModelFile(
-          tempFilePath, 
+          preparedPath,
           manifest,
         );
         
@@ -527,15 +542,16 @@ class VisionDetectionController extends ChangeNotifier {
         }
 
         // 验证通过，原子性地移动到最终位置
-        final tempFileForRename = File(tempFilePath);
+        final tempFileForRename = File(preparedPath);
         if (await tempFileForRename.exists()) {
           // 如果目标文件存在，先删除
           final finalFile = File(finalFilePath);
           if (await finalFile.exists()) {
             await finalFile.delete();
           }
-          // 重命名临时文件
-          await tempFileForRename.rename(finalFilePath);
+          if (tempFileForRename.path != finalFilePath) {
+            await tempFileForRename.rename(finalFilePath);
+          }
         }
 
         _modelStates[model] = _modelStates[model]!.copyWith(
@@ -603,6 +619,43 @@ class VisionDetectionController extends ChangeNotifier {
     }
     
     notifyListeners();
+  }
+
+  Future<String> _prepareDownloadedModelFile({
+    required String tempFilePath,
+    required String expectedOutputPath,
+  }) async {
+    final file = File(tempFilePath);
+    if (!await file.exists()) return tempFilePath;
+
+    final head = await file.openRead(0, 4).first;
+    final isZip = head.length >= 2 && head[0] == 0x50 && head[1] == 0x4B;
+    if (!isZip) return tempFilePath;
+
+    final tempDir = Directory('${file.parent.path}/extract_model_${DateTime.now().millisecondsSinceEpoch}');
+    await tempDir.create(recursive: true);
+    try {
+      final inputStream = InputFileStream(tempFilePath);
+      final archive = ZipDecoder().decodeStream(inputStream);
+      inputStream.close();
+      extractArchiveToDisk(archive, tempDir.path);
+
+      final modelFile = tempDir
+          .listSync(recursive: true)
+          .whereType<File>()
+          .firstWhere(
+            (item) => item.path.toLowerCase().endsWith('.tflite'),
+            orElse: () => throw Exception('压缩包中未找到 tflite 模型'),
+          );
+      await modelFile.copy(expectedOutputPath);
+      await tempDir.delete(recursive: true);
+      return expectedOutputPath;
+    } catch (_) {
+      if (await tempDir.exists()) {
+        await tempDir.delete(recursive: true);
+      }
+      rethrow;
+    }
   }
 
   /// 验证模型文件完整性
@@ -783,8 +836,12 @@ class VisionDetectionController extends ChangeNotifier {
     _previousLumaMean = null;
     _recentMotion = 0;
     _fps = 0;
+    _inferenceFps = 0;
     _processingLatencyMs = 0;
     _lastFrameTime = null;
+    _lastInferenceFrameTime = null;
+    _lastUiNotifyTime = null;
+    _lastInferenceStartedAt = null;
     _latestEvent = VisionEvent(
       title: '视频流启动',
       detail: '流水线 ${selectedPipeline.shortLabel} 已激活。',
@@ -801,13 +858,20 @@ class VisionDetectionController extends ChangeNotifier {
       return;
     }
 
+    final now = DateTime.now();
+    final minIntervalMs = _minInferenceIntervalMsForMode(_detectionMode);
+    if (_lastInferenceStartedAt != null &&
+        now.difference(_lastInferenceStartedAt!).inMilliseconds < minIntervalMs) {
+      return;
+    }
+
     _isFrameBeingProcessed = true;
+    _lastInferenceStartedAt = now;
     final start = DateTime.now();
 
     try {
       _detections = _runFrameDrivenInference(image);
 
-      final now = DateTime.now();
       if (_lastFrameTime != null) {
         final interval = now.difference(_lastFrameTime!).inMilliseconds;
         if (interval > 0) {
@@ -815,11 +879,35 @@ class VisionDetectionController extends ChangeNotifier {
         }
       }
       _lastFrameTime = now;
+      if (_lastInferenceFrameTime != null) {
+        final inferInterval = now.difference(_lastInferenceFrameTime!).inMilliseconds;
+        if (inferInterval > 0) {
+          _inferenceFps = (1000 / inferInterval).round();
+        }
+      }
+      _lastInferenceFrameTime = now;
       _processingLatencyMs = now.difference(start).inMilliseconds;
 
       _evaluateEvent();
     } finally {
       _isFrameBeingProcessed = false;
+      _notifyListenersThrottled();
+    }
+  }
+
+  int _minInferenceIntervalMsForMode(VisionDetectionMode mode) {
+    return switch (mode) {
+      VisionDetectionMode.performance => 90,
+      VisionDetectionMode.balanced => 60,
+      VisionDetectionMode.sensitive => 45,
+    };
+  }
+
+  void _notifyListenersThrottled() {
+    final now = DateTime.now();
+    if (_lastUiNotifyTime == null ||
+        now.difference(_lastUiNotifyTime!).inMilliseconds >= 80) {
+      _lastUiNotifyTime = now;
       notifyListeners();
     }
   }
@@ -1270,7 +1358,7 @@ class VisionDetectionController extends ChangeNotifier {
 
   // 算法参数（由模型绑定算法驱动）
   AlgorithmParams _algorithmParams =
-      AlgorithmParams.defaultFor(VisionModelType.builtinPersonFast.boundAlgorithm);
+      VisionDetectionMode.balanced.presetFor(VisionModelType.builtinPersonFast.boundAlgorithm);
 
   void _evaluateEvent() {
     if (_detections.isEmpty) {
@@ -1461,7 +1549,7 @@ class VisionDetectionController extends ChangeNotifier {
     final nextAlgorithm = model.boundAlgorithm;
     if (_selectedAlgorithm != nextAlgorithm) {
       _selectedAlgorithm = nextAlgorithm;
-      _algorithmParams = AlgorithmParams.defaultFor(nextAlgorithm);
+      _algorithmParams = _detectionMode.presetFor(nextAlgorithm);
       _history.clear();
     }
     _latestEvent = VisionEvent(
@@ -1489,40 +1577,23 @@ class VisionDetectionController extends ChangeNotifier {
     await _loadModel(_selectedModel);
   }
 
-  /// 兼容层：算法切换已废弃，算法与模型绑定
-  void selectAlgorithm(VisionAlgorithmType algorithm, {AlgorithmParams? params}) {
-    if (_selectedAlgorithm != algorithm) {
-      _latestEvent = VisionEvent(
-        title: '算法已绑定模型',
-        detail: '当前版本不可单独切换算法，请切换模型。',
-        timestamp: DateTime.now(),
-        level: VisionEventLevel.warning,
-      );
-      notifyListeners();
-      return;
-    }
-
-    if (params != null) {
-      _algorithmParams = params;
-    }
-    notifyListeners();
+  Future<void> switchAlgorithmByModel(VisionModelType model) async {
+    await selectModel(model);
   }
 
-  /// 更新算法参数
-  void updateAlgorithmParams(AlgorithmParams params) {
-    _algorithmParams = params;
+  void setDetectionMode(VisionDetectionMode mode) {
+    if (_detectionMode == mode) {
+      return;
+    }
+    _detectionMode = mode;
+    _algorithmParams = mode.presetFor(_selectedAlgorithm);
     _latestEvent = VisionEvent(
-      title: '算法参数更新',
-      detail: '关键点置信度: ${params.keypointConfidenceThreshold.toStringAsFixed(2)}, '
-              '时序窗口: ${params.timeWindowMs}ms, '
-              '躯干角度阈值: ${params.fallAngleThreshold.toStringAsFixed(0)}°',
+      title: '模式已更新',
+      detail: '当前模式：${mode.label}。参数已切换为预设值。',
       timestamp: DateTime.now(),
     );
     notifyListeners();
   }
-  
-  /// 获取当前算法参数
-  AlgorithmParams get algorithmParams => _algorithmParams;
 
   void _publishEvent() {
     if (_mqttService.currentStatus != MqttConnectionStatus.connected || _latestEvent == null) {
@@ -1548,6 +1619,12 @@ class VisionDetectionController extends ChangeNotifier {
     _previousLumaMean = null;
     _recentMotion = 0;
     _detections = const [];
+    _fps = 0;
+    _inferenceFps = 0;
+    _processingLatencyMs = 0;
+    _lastInferenceStartedAt = null;
+    _lastInferenceFrameTime = null;
+    _lastUiNotifyTime = null;
     _latestEvent = VisionEvent(
       title: '视频流暂停',
       detail: '已停止采样与推理。',
@@ -1562,6 +1639,12 @@ class VisionDetectionController extends ChangeNotifier {
     _interpreter?.close();
     _dio.close();
     super.dispose();
+  }
+
+  Future<void> onPageClosed() async {
+    if (_isStreaming) {
+      await _stopStreaming();
+    }
   }
 }
 
