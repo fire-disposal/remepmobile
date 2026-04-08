@@ -6,6 +6,7 @@ import '../../core/storage/secure_storage_service.dart';
 import '../../core/theme/theme_notifier.dart';
 import 'presentation/controllers/settings_controller.dart';
 import 'presentation/page/settings_page.dart';
+import '../vision_detection/vision_detection_controller.dart';
 
 class SettingsModule {
   static void registerDependencies(GetIt getIt) {
@@ -15,6 +16,7 @@ class SettingsModule {
       getIt<CacheStorageService>(),
       getIt<SecureStorageService>(),
       getIt<PermissionService>(),
+      getIt<VisionDetectionController>(),
     ));
   }
 

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 
@@ -6,8 +8,6 @@ import '../../core/widgets/cards.dart';
 import 'detection_overlay_painter.dart';
 import 'vision_detection_controller.dart';
 import 'vision_detection_models.dart';
-
-export 'vision_detection_models.dart' show AlgorithmParams;
 
 class VisionDetectionPage extends StatefulWidget {
   const VisionDetectionPage({super.key});
@@ -28,7 +28,7 @@ class _VisionDetectionPageState extends State<VisionDetectionPage> {
 
   @override
   void dispose() {
-    _controller.dispose();
+    unawaited(_controller.onPageClosed());
     super.dispose();
   }
 
@@ -40,100 +40,11 @@ class _VisionDetectionPageState extends State<VisionDetectionPage> {
         builder: (context, _) {
           return _CameraWorkbench(
             controller: _controller,
-            onModelPanelTap: () => _showModelPanel(context),
             onAlgorithmPanelTap: () => _showAlgorithmPanel(context),
             onMqttPanelTap: () => _showMqttPanel(context),
             onEventPanelTap: () => _showEventPanel(context),
           );
         },
-      ),
-    );
-  }
-
-  Future<void> _showModelPanel(BuildContext context) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (context) => SafeArea(
-        child: AnimatedBuilder(
-          animation: _controller,
-          builder: (context, _) => ConstrainedBox(
-            // 限制最大高度为屏幕的85%，防止溢出
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.85,
-            ),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 18),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('模型管理', style: Theme.of(context).textTheme.titleMedium),
-                      if (_controller.isModelLoading)
-                        const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                            SizedBox(width: 8),
-                            Text('加载中...', style: TextStyle(fontSize: 12)),
-                          ],
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  if (_controller.modelLoadError != null)
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      margin: const EdgeInsets.only(bottom: 10),
-                      decoration: BoxDecoration(
-                        color: Colors.red.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.error_outline, color: Colors.red, size: 18),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _controller.modelLoadError!,
-                              style: const TextStyle(color: Colors.red, fontSize: 12),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  // 使用 Flexible 包裹列表，允许滚动
-                  Flexible(
-                    child: SingleChildScrollView(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: _controller.modelStates.map(
-                          (state) => _CompactModelTile(
-                            state: state,
-                            selected: state.manifest.type == _controller.selectedModel,
-                            onSelect: () => _controller.selectModel(state.manifest.type),
-                            onDownload: () => _controller.downloadModel(state.manifest.type),
-                            onDelete: () => _controller.removeModel(state.manifest.type),
-                          ),
-                        ).toList(),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -156,7 +67,7 @@ class _VisionDetectionPageState extends State<VisionDetectionPage> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('流水线参数', style: Theme.of(context).textTheme.titleMedium),
+                  Text('算法切换', style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 12),
                   // 使用 Flexible + SingleChildScrollView 支持内容滚动
                   Flexible(
@@ -193,12 +104,44 @@ class _VisionDetectionPageState extends State<VisionDetectionPage> {
                           
                           const SizedBox(height: 16),
                           
-                          // 参数配置
-                          Text('参数配置', style: Theme.of(context).textTheme.bodySmall),
+                          Text('可用算法', style: Theme.of(context).textTheme.bodySmall),
                           const SizedBox(height: 8),
-                          _AlgorithmParamsPanel(controller: _controller),
-                          
+                          ..._controller.modelStates.map((state) {
+                            final model = state.manifest.type;
+                            final enabled = state.manifest.builtIn || state.isDownloaded;
+                            return Card(
+                              child: ListTile(
+                                dense: true,
+                                title: Text(model.pipeline.shortLabel),
+                                subtitle: Text(model.pipeline.description),
+                                trailing: _controller.selectedModel == model
+                                    ? const Icon(Icons.check_circle, color: Colors.green)
+                                    : null,
+                                enabled: enabled,
+                                onTap: enabled
+                                    ? () => _controller.switchAlgorithmByModel(model)
+                                    : null,
+                              ),
+                            );
+                          }),
+
                           const SizedBox(height: 16),
+                          Text('识别模式', style: Theme.of(context).textTheme.bodySmall),
+                          const SizedBox(height: 8),
+                          SegmentedButton<VisionDetectionMode>(
+                            segments: VisionDetectionMode.values
+                                .map(
+                                  (mode) => ButtonSegment<VisionDetectionMode>(
+                                    value: mode,
+                                    label: Text(mode.label),
+                                  ),
+                                )
+                                .toList(),
+                            selected: {_controller.detectionMode},
+                            onSelectionChanged: (values) {
+                              _controller.setDetectionMode(values.first);
+                            },
+                          ),
                         ],
                       ),
                     ),
@@ -294,14 +237,12 @@ class _VisionDetectionPageState extends State<VisionDetectionPage> {
 class _CameraWorkbench extends StatelessWidget {
   const _CameraWorkbench({
     required this.controller,
-    required this.onModelPanelTap,
     required this.onAlgorithmPanelTap,
     required this.onMqttPanelTap,
     required this.onEventPanelTap,
   });
 
   final VisionDetectionController controller;
-  final VoidCallback onModelPanelTap;
   final VoidCallback onAlgorithmPanelTap;
   final VoidCallback onMqttPanelTap;
   final VoidCallback onEventPanelTap;
@@ -457,7 +398,7 @@ class _CameraWorkbench extends StatelessWidget {
     return Row(
       children: [
         _MetricBadge(
-          text: 'FPS ${controller.fps}',
+          text: '推理FPS ${controller.inferenceFps}',
           color: Colors.blueAccent,
           icon: Icons.speed,
           compact: true,
@@ -530,12 +471,6 @@ class _CameraWorkbench extends StatelessWidget {
         direction: Axis.vertical,
         spacing: 8,
         children: [
-          _QuickActionButton(
-            icon: Icons.memory_rounded,
-            label: '模型',
-            onTap: onModelPanelTap,
-            isActive: controller.isModelLoading,
-          ),
           _QuickActionButton(
             icon: Icons.tune_rounded,
             label: '算法',
@@ -704,99 +639,6 @@ class _PermissionBlock extends StatelessWidget {
   }
 }
 
-class _CompactModelTile extends StatelessWidget {
-  const _CompactModelTile({
-    required this.state,
-    required this.selected,
-    required this.onSelect,
-    required this.onDownload,
-    required this.onDelete,
-  });
-
-  final ModelRuntimeState state;
-  final bool selected;
-  final VoidCallback onSelect;
-  final VoidCallback onDownload;
-  final VoidCallback onDelete;
-
-  @override
-  Widget build(BuildContext context) {
-    final manifest = state.manifest;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: selected ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.45) : null,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Theme.of(context).dividerColor.withValues(alpha: 0.6)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    manifest.type.label,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-                  ),
-                ),
-                Text(
-                  manifest.sizeLabel,
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-                const SizedBox(width: 8),
-                if (selected)
-                  const Icon(Icons.check_circle_rounded, size: 18, color: Colors.green),
-              ],
-            ),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                '${manifest.type.description} · ${manifest.type.pipeline.algorithm.label}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ),
-            if (state.isDownloading) ...[
-              const SizedBox(height: 6),
-              LinearProgressIndicator(value: state.progress),
-            ],
-            const SizedBox(height: 6),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                IconButton.outlined(
-                  visualDensity: VisualDensity.compact,
-                  tooltip: '切换模型',
-                  onPressed: (manifest.builtIn || state.isDownloaded) ? onSelect : null,
-                  icon: const Icon(Icons.swap_horiz_rounded),
-                ),
-                if (!manifest.builtIn) ...[
-                  const SizedBox(width: 6),
-                  IconButton.filledTonal(
-                    visualDensity: VisualDensity.compact,
-                    tooltip: state.isDownloaded ? '重新下载' : '下载模型',
-                    onPressed: state.isDownloading ? null : onDownload,
-                    icon: Icon(state.isDownloaded ? Icons.download_for_offline_rounded : Icons.download_rounded),
-                  ),
-                  const SizedBox(width: 6),
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    tooltip: '删除本地',
-                    onPressed: state.isDownloaded && !state.isDownloading ? onDelete : null,
-                    icon: const Icon(Icons.delete_outline_rounded),
-                  ),
-                ],
-              ],
-            )
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 class _MqttConfigRow extends StatefulWidget {
   const _MqttConfigRow({required this.controller});
@@ -993,173 +835,6 @@ class _EventBar extends StatelessWidget {
                 style: const TextStyle(fontSize: 13),
               ),
             ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// 算法参数配置面板
-class _AlgorithmParamsPanel extends StatefulWidget {
-  const _AlgorithmParamsPanel({required this.controller});
-
-  final VisionDetectionController controller;
-
-  @override
-  State<_AlgorithmParamsPanel> createState() => _AlgorithmParamsPanelState();
-}
-
-class _AlgorithmParamsPanelState extends State<_AlgorithmParamsPanel> {
-  late AlgorithmParams _params;
-
-  @override
-  void initState() {
-    super.initState();
-    _params = widget.controller.algorithmParams;
-  }
-
-  @override
-  void didUpdateWidget(covariant _AlgorithmParamsPanel oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    _params = widget.controller.algorithmParams;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isKeypointAlgo = widget.controller.selectedPipeline.algorithm == VisionAlgorithmType.keypointRelation;
-    
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // 关键点置信度阈值（通用）
-        _ParamSlider(
-          label: '关键点置信度阈值',
-          value: _params.keypointConfidenceThreshold,
-          min: 0.1,
-          max: 0.9,
-          onChanged: (v) => setState(() => _params = _params.copyWith(keypointConfidenceThreshold: v)),
-          onChangeEnd: (v) => widget.controller.updateAlgorithmParams(
-            _params.copyWith(keypointConfidenceThreshold: v),
-          ),
-        ),
-        
-        // 时间窗口（通用）
-        _ParamSlider(
-          label: '时间窗口 (秒)',
-          value: _params.timeWindowMs / 1000,
-          min: 0.5,
-          max: 5.0,
-          divisions: 9,
-          onChanged: (v) => setState(() => _params = _params.copyWith(timeWindowMs: (v * 1000).round())),
-          onChangeEnd: (v) => widget.controller.updateAlgorithmParams(
-            _params.copyWith(timeWindowMs: (v * 1000).round()),
-          ),
-        ),
-        
-        if (isKeypointAlgo) ...[
-          // 关键点关系算法特有参数
-          _ParamSlider(
-            label: '躯干角度阈值 (°)',
-            value: _params.fallAngleThreshold,
-            min: 30.0,
-            max: 90.0,
-            divisions: 12,
-            onChanged: (v) => setState(() => _params = _params.copyWith(fallAngleThreshold: v)),
-            onChangeEnd: (v) => widget.controller.updateAlgorithmParams(
-              _params.copyWith(fallAngleThreshold: v),
-            ),
-          ),
-          
-          _ParamSlider(
-            label: '最小关键点数量',
-            value: _params.minKeyPoints.toDouble(),
-            min: 4.0,
-            max: 17.0,
-            divisions: 13,
-            onChanged: (v) => setState(() => _params = _params.copyWith(minKeyPoints: v.round())),
-            onChangeEnd: (v) => widget.controller.updateAlgorithmParams(
-              _params.copyWith(minKeyPoints: v.round()),
-            ),
-          ),
-        ] else ...[
-          // 识别框趋势算法特有参数
-          _ParamSlider(
-            label: '长宽比阈值',
-            value: _params.aspectRatioThreshold,
-            min: 0.5,
-            max: 2.0,
-            onChanged: (v) => setState(() => _params = _params.copyWith(aspectRatioThreshold: v)),
-            onChangeEnd: (v) => widget.controller.updateAlgorithmParams(
-              _params.copyWith(aspectRatioThreshold: v),
-            ),
-          ),
-          
-          _ParamSlider(
-            label: '垂直速度阈值 (/s)',
-            value: _params.verticalSpeedThreshold,
-            min: 0.1,
-            max: 1.0,
-            onChanged: (v) => setState(() => _params = _params.copyWith(verticalSpeedThreshold: v)),
-            onChangeEnd: (v) => widget.controller.updateAlgorithmParams(
-              _params.copyWith(verticalSpeedThreshold: v),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-/// 参数滑块组件
-class _ParamSlider extends StatelessWidget {
-  const _ParamSlider({
-    required this.label,
-    required this.value,
-    required this.min,
-    required this.max,
-    required this.onChanged,
-    required this.onChangeEnd,
-    this.divisions,
-  });
-
-  final String label;
-  final double value;
-  final double min;
-  final double max;
-  final ValueChanged<double> onChanged;
-  final ValueChanged<double> onChangeEnd;
-  final int? divisions;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(label, style: const TextStyle(fontSize: 12)),
-            Text(
-              value.toStringAsFixed(value < 1 ? 2 : 1),
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ),
-          ],
-        ),
-        SizedBox(
-          height: 32,
-          child: Slider(
-            value: value,
-            min: min,
-            max: max,
-            divisions: divisions,
-            onChanged: onChanged,
-            onChangeEnd: onChangeEnd,
           ),
         ),
       ],
