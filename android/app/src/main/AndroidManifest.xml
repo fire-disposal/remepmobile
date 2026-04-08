@@ -13,6 +13,11 @@
     <!-- Android 13+ (API 33+) 使用新的媒体权限替代存储权限 -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <!-- Android 11+ 全文件访问权限（仅在确有必要时申请） -->
+    <uses-permission
+        android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage" />
     
     <!-- ============================================================================
          摄像头与多媒体 (Camera & Media)

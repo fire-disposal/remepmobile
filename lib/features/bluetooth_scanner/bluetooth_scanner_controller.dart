@@ -133,7 +133,11 @@ class BluetoothScannerController extends ChangeNotifier {
     await _scanSubscription?.cancel();
     _scanSubscription = null;
 
-    await _bluetoothService.stopScan();
+    try {
+      await _bluetoothService.stopScan();
+    } catch (e) {
+      AppLogger.warning('[$_tag] stopScan failed: $e');
+    }
 
     _updateStatus(ScannerStatus.idle);
   }

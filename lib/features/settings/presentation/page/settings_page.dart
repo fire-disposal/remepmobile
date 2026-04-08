@@ -113,7 +113,7 @@ class SettingsPage extends StatelessWidget {
         style: const TextStyle(fontSize: 14),
       ),
       subtitle: Text(
-        statusText,
+        '${_getPermissionDeclaration(permission)}\n状态：$statusText',
         style: TextStyle(
           color: statusColor, 
           fontWeight: FontWeight.w500,
@@ -212,6 +212,27 @@ class SettingsPage extends StatelessWidget {
       case AppPermissionStatus.limited: return '部分授权';
       case AppPermissionStatus.provisional: return '临时授权';
       case null: return '未知';
+    }
+  }
+
+  String _getPermissionDeclaration(AppPermission permission) {
+    switch (permission) {
+      case AppPermission.camera:
+        return '用于视觉检测与拍摄。';
+      case AppPermission.microphone:
+        return '用于语音采集与通话录音。';
+      case AppPermission.storage:
+        return '用于读取/导出本地文件（Android 13+ 将分媒体类型授权）。';
+      case AppPermission.location:
+        return '用于蓝牙扫描兼容（Android 11 及以下）。';
+      case AppPermission.bluetooth:
+        return '用于扫描与连接 BLE 设备（Android 12+ 需单独授权）。';
+      case AppPermission.notification:
+        return '用于系统通知与告警推送（Android 13+）。';
+      case AppPermission.sensors:
+        return 'IMU（加速度计/陀螺仪）无需单独弹窗授权。';
+      case AppPermission.activityRecognition:
+        return '用于步态/活动检测（Android 10+）。';
     }
   }
 

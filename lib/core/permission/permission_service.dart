@@ -32,8 +32,27 @@ class PermissionService {
     AppPermission.camera,
   ];
 
+  Future<int?> _androidSdkInt() async {
+    if (!Platform.isAndroid) return null;
+    final deviceInfo = DeviceInfoPlugin();
+    final androidInfo = await deviceInfo.androidInfo;
+    return androidInfo.version.sdkInt;
+  }
+
   /// 检查单个权限状态
   Future<AppPermissionStatus> checkPermission(AppPermission permission) async {
+    if (!await _isPermissionAvailable(permission)) {
+      return AppPermissionStatus.granted;
+    }
+
+    if (permission == AppPermission.bluetooth) {
+      return _checkBluetoothPermissionStatus();
+    }
+
+    if (permission == AppPermission.storage) {
+      return _checkStoragePermissionStatus();
+    }
+
     final permissionHandler = _mapPermission(permission);
     final status = await permissionHandler.status;
     return _mapStatus(status);
@@ -43,9 +62,18 @@ class PermissionService {
   /// 
   /// 对于蓝牙权限，在 Android 12+ 会自动请求 bluetoothScan 和 bluetoothConnect
   Future<AppPermissionStatus> requestPermission(AppPermission permission) async {
+    if (!await _isPermissionAvailable(permission)) {
+      return AppPermissionStatus.granted;
+    }
+
     // 蓝牙权限特殊处理：Android 12+ 需要同时请求 SCAN 和 CONNECT
     if (permission == AppPermission.bluetooth) {
       return requestBluetoothPermissions();
+    }
+
+    // 文件访问权限在高版本 Android 需要走分版本策略
+    if (permission == AppPermission.storage) {
+      return requestStoragePermissions();
     }
     
     final permissionHandler = _mapPermission(permission);
@@ -53,8 +81,67 @@ class PermissionService {
     return _mapStatus(status);
   }
 
+  Future<AppPermissionStatus> _checkBluetoothPermissionStatus() async {
+    if (!Platform.isAndroid) {
+      return _mapStatus(await Permission.bluetooth.status);
+    }
+
+    final sdkInt = await _androidSdkInt() ?? 0;
+    if (sdkInt < 31) {
+      return _mapStatus(await Permission.bluetooth.status);
+    }
+
+    final scanStatus = await Permission.bluetoothScan.status;
+    final connectStatus = await Permission.bluetoothConnect.status;
+    if (scanStatus.isPermanentlyDenied || connectStatus.isPermanentlyDenied) {
+      return AppPermissionStatus.permanentlyDenied;
+    }
+    if (scanStatus.isDenied || connectStatus.isDenied) {
+      return AppPermissionStatus.denied;
+    }
+    if (scanStatus.isGranted && connectStatus.isGranted) {
+      return AppPermissionStatus.granted;
+    }
+    return _mapStatus(scanStatus);
+  }
+
+  Future<AppPermissionStatus> _checkStoragePermissionStatus() async {
+    if (!Platform.isAndroid) {
+      return _mapStatus(await Permission.storage.status);
+    }
+
+    final sdkInt = await _androidSdkInt() ?? 0;
+    if (sdkInt >= 33) {
+      final photos = await Permission.photos.status;
+      final videos = await Permission.videos.status;
+      final audio = await Permission.audio.status;
+      if (photos.isPermanentlyDenied || videos.isPermanentlyDenied || audio.isPermanentlyDenied) {
+        return AppPermissionStatus.permanentlyDenied;
+      }
+      if (photos.isGranted && videos.isGranted && audio.isGranted) {
+        return AppPermissionStatus.granted;
+      }
+      return AppPermissionStatus.denied;
+    }
+
+    if (sdkInt >= 30) {
+      return _mapStatus(await Permission.manageExternalStorage.status);
+    }
+
+    return _mapStatus(await Permission.storage.status);
+  }
+
   /// 请求蓝牙权限（Android 12+ 需要 SCAN 和 CONNECT）
   Future<AppPermissionStatus> requestBluetoothPermissions() async {
+    if (!Platform.isAndroid) {
+      return _mapStatus(await Permission.bluetooth.request());
+    }
+
+    final sdkInt = await _androidSdkInt() ?? 0;
+    if (sdkInt < 31) {
+      return _mapStatus(await Permission.bluetooth.request());
+    }
+
     // 请求蓝牙扫描权限
     final scanStatus = await Permission.bluetoothScan.request();
     
@@ -78,6 +165,34 @@ class PermissionService {
     
     // 其他情况
     return _mapStatus(scanStatus);
+  }
+
+  /// 请求文件访问权限（按 Android 版本选择权限组）
+  Future<AppPermissionStatus> requestStoragePermissions() async {
+    if (!Platform.isAndroid) {
+      return _mapStatus(await Permission.storage.request());
+    }
+
+    final sdkInt = await _androidSdkInt() ?? 0;
+    if (sdkInt >= 33) {
+      final photos = await Permission.photos.request();
+      final videos = await Permission.videos.request();
+      final audio = await Permission.audio.request();
+      if (photos.isPermanentlyDenied || videos.isPermanentlyDenied || audio.isPermanentlyDenied) {
+        return AppPermissionStatus.permanentlyDenied;
+      }
+      if (photos.isGranted && videos.isGranted && audio.isGranted) {
+        return AppPermissionStatus.granted;
+      }
+      return AppPermissionStatus.denied;
+    }
+
+    if (sdkInt >= 30) {
+      final status = await Permission.manageExternalStorage.request();
+      return _mapStatus(status);
+    }
+
+    return _mapStatus(await Permission.storage.request());
   }
 
   /// 检查多个权限状态
@@ -129,18 +244,15 @@ class PermissionService {
       return false;
     }
     
-    final deviceInfo = DeviceInfoPlugin();
-    final androidInfo = await deviceInfo.androidInfo;
-    final sdkInt = androidInfo.version.sdkInt;
+    final sdkInt = await _androidSdkInt() ?? 0;
     
     switch (permission) {
       case AppPermission.activityRecognition:
         // ACTIVITY_RECOGNITION 只在 Android 10+ (API 29+) 可用
         return sdkInt >= 29;
       case AppPermission.sensors:
-        // Android 13+ (API 33+) 使用 BODY_SENSORS 替代
-        // 但 Flutter permission_handler 已内部处理
-        return true;
+        // IMU（加速度计/陀螺仪）不需要运行时弹窗权限
+        return false;
       case AppPermission.notification:
         // 通知权限只在 Android 13+ (API 33+) 需要动态请求
         return sdkInt >= 33;
@@ -268,7 +380,6 @@ class PermissionService {
         return Permission.sensors;
       case AppPermission.activityRecognition:
         // Android 10+ (API 29+) 需要 ACTIVITY_RECOGNITION 权限
-        // 低版本系统此权限不存在，直接返回 sensors 作为替代
         return Permission.activityRecognition;
     }
   }
