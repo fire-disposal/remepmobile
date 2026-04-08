@@ -16,7 +16,7 @@ class BluetoothScannerPage extends StatefulWidget {
 
 class _BluetoothScannerPageState extends State<BluetoothScannerPage>
     with WidgetsBindingObserver {
-  late final BluetoothScannerController _controller;
+  BluetoothScannerController? _controller;
   bool _isInitialized = false;
   bool _onlyConnectable = false;
 
@@ -29,7 +29,7 @@ class _BluetoothScannerPageState extends State<BluetoothScannerPage>
 
   Future<void> _init() async {
     _controller = getIt<BluetoothScannerController>();
-    await _controller.initialize();
+    await _controller!.initialize();
 
     if (mounted) {
       setState(() => _isInitialized = true);
@@ -39,14 +39,14 @@ class _BluetoothScannerPageState extends State<BluetoothScannerPage>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused) {
-      _controller.stopScan();
+      _controller?.stopScan();
     }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _controller.dispose();
+    _controller?.dispose();
     super.dispose();
   }
 
@@ -66,7 +66,7 @@ class _BluetoothScannerPageState extends State<BluetoothScannerPage>
         ),
         actions: [
           IconButton(
-            onPressed: () => _controller.clearDevices(),
+            onPressed: () => _controller?.clearDevices(),
             icon: const Icon(Icons.clear_all),
             tooltip: '清除列表',
           ),
@@ -81,11 +81,16 @@ class _BluetoothScannerPageState extends State<BluetoothScannerPage>
   }
 
   Widget _buildScannerView() {
+    final controller = _controller;
+    if (controller == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
     return AnimatedBuilder(
-      animation: _controller,
+      animation: controller,
       builder: (context, child) {
-        final state = _controller.state;
-        final devices = _controller.getFilteredDevices(
+        final state = controller.state;
+        final devices = controller.getFilteredDevices(
           onlyConnectable: _onlyConnectable,
         );
 
@@ -255,7 +260,7 @@ class _BluetoothScannerPageState extends State<BluetoothScannerPage>
         title: '扫描出错',
         subtitle: state.errorMessage ?? '请检查蓝牙权限后重试',
         actionText: '重试',
-      onAction: () => _controller.startScan(),
+      onAction: () => _controller?.startScan(),
       );
     }
 
@@ -372,13 +377,18 @@ class _BluetoothScannerPageState extends State<BluetoothScannerPage>
   }
 
   Widget _buildFloatingActionButton() {
+    final controller = _controller;
+    if (controller == null) {
+      return const SizedBox.shrink();
+    }
+
     return AnimatedBuilder(
-      animation: _controller,
+      animation: controller,
       builder: (context, child) {
-        final isScanning = _controller.state.isScanning;
+        final isScanning = controller.state.isScanning;
 
         return FloatingActionButton.extended(
-          onPressed: () => _controller.toggleScan(),
+          onPressed: () => _controller?.toggleScan(),
           icon: Icon(isScanning ? Icons.stop_rounded : Icons.search_rounded),
           label: Text(isScanning ? '停止扫描' : '开始扫描'),
           backgroundColor: isScanning ? Colors.red : null,
@@ -475,7 +485,7 @@ class _BluetoothScannerPageState extends State<BluetoothScannerPage>
                       child: FilledButton.icon(
                         onPressed: () {
                           Navigator.pop(context);
-                          _controller.connectToDevice(result.device);
+                          _controller?.connectToDevice(result.device);
                         },
                         icon: const Icon(Icons.link_rounded),
                         label: const Text('连接设备'),
