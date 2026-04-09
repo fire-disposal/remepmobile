@@ -95,10 +95,10 @@ enum VisionDetectionMode {
 }
 
 enum VisionModelType {
-  builtinPersonFast('MoveNet (内置)', '内置轻量姿态模型，17个关键点，无需下载', Colors.lightBlue),
-  poseNano('MoveNet Lightning', 'Google官方轻量姿态模型，17个关键点', Colors.teal),
-  personDetectorLite('BlazePose', 'Google MediaPipe人体检测', Colors.orange),
-  bodyKeypointLite('EfficientDet', '轻量级目标检测模型', Colors.purple);
+  builtinPersonFast('YOLO11n Detect', 'Ultralytics 官方目标检测模型（推荐）', Colors.lightBlue),
+  poseNano('YOLO11n Pose', 'Ultralytics 官方人体姿态模型', Colors.teal),
+  personDetectorLite('YOLO11n Seg', 'Ultralytics 官方实例分割模型', Colors.orange),
+  bodyKeypointLite('YOLO11n OBB', 'Ultralytics 官方旋转框检测模型', Colors.purple);
 
   final String label;
   final String description;
@@ -108,10 +108,10 @@ enum VisionModelType {
 
   /// 简短标签，用于紧凑显示
   String get shortLabel => switch (this) {
-    VisionModelType.builtinPersonFast => '内置',
-    VisionModelType.poseNano => 'MoveNet',
-    VisionModelType.personDetectorLite => 'BlazePose',
-    VisionModelType.bodyKeypointLite => 'EffDet',
+    VisionModelType.builtinPersonFast => 'Detect',
+    VisionModelType.poseNano => 'Pose',
+    VisionModelType.personDetectorLite => 'Seg',
+    VisionModelType.bodyKeypointLite => 'OBB',
   };
 }
 
@@ -202,6 +202,13 @@ class VisionPipelineProfile {
 }
 
 extension VisionModelProfileX on VisionModelType {
+  String get yoloModelId => switch (this) {
+    VisionModelType.builtinPersonFast => 'yolo11n',
+    VisionModelType.poseNano => 'yolo11n-pose',
+    VisionModelType.personDetectorLite => 'yolo11n-seg',
+    VisionModelType.bodyKeypointLite => 'yolo11n-obb',
+  };
+
   /// 模型绑定算法，不再独立选择
   VisionAlgorithmType get boundAlgorithm => switch (this) {
     VisionModelType.builtinPersonFast || VisionModelType.poseNano => VisionAlgorithmType.keypointRelation,
