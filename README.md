@@ -5,17 +5,17 @@
 ## 当前模块
 
 - MQTT 数据模拟
-- 视觉跌倒检测（开发起点：依赖检查 + 模型加载占位 + 单次推理模拟）
+- 视觉跌倒检测（基于 Ultralytics 官方 YOLO Flutter SDK 的实时推理）
 - IMU 跌倒检测（开发起点：`sensors_plus` 实时流 + 阈值策略 + mock 采样）
 - 蓝牙数据接收调试
 
 ## 关键依赖（视觉 + IMU）
 
 ```bash
-flutter pub add camera tflite_flutter permission_handler path_provider sensors_plus
+flutter pub add ultralytics_yolo permission_handler sensors_plus
 ```
 
-> 视觉模块默认按 `camera + tflite_flutter + assets/models` 的接入路径设计。
+> 视觉模块默认按 `YOLOView + ultralytics_yolo` 官方接入路径设计，优先使用官方内置能力。
 > IMU 模块默认按 `sensors_plus` 加速度流接入，阈值逻辑可直接替换为业务策略。
 
 ## 路由

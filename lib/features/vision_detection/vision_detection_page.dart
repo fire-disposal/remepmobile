@@ -1,11 +1,10 @@
 import 'dart:async';
 
-import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:ultralytics_yolo/ultralytics_yolo.dart';
 
 import '../../core/di/service_locator.dart';
 import '../../core/widgets/cards.dart';
-import 'detection_overlay_painter.dart';
 import 'vision_detection_controller.dart';
 import 'vision_detection_models.dart';
 
@@ -253,26 +252,30 @@ class _CameraWorkbench extends StatelessWidget {
       return _PermissionBlock(controller: controller);
     }
 
-    final camera = controller.cameraController;
-    final canPreview = camera?.value.isInitialized ?? false;
-
-    if (!canPreview) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
     return Stack(
       fit: StackFit.expand,
       children: [
-        // 相机预览层
-        _AdaptiveCameraPreview(camera: camera!),
-        
-        // 检测框和关键点绘制层
-        RepaintBoundary(
-          child: CustomPaint(
-            painter: DetectionOverlayPainter(
-              controller.detections,
-              outputKind: controller.selectedPipeline.outputKind,
-            ),
+        // 官方 YOLO SDK 组件：内置相机预览 + 推理 + 叠加层
+        Positioned.fill(
+          child: IgnorePointer(
+            ignoring: !controller.isStreaming,
+            child: controller.isStreaming
+                ? YOLOView(
+                    modelPath: controller.yoloModelPath,
+                    task: _taskFor(controller.selectedModel),
+                    onResult: (results) {
+                      controller.onYoloResult(results.cast<dynamic>());
+                    },
+                  )
+                : const ColoredBox(
+                    color: Colors.black,
+                    child: Center(
+                      child: Text(
+                        '点击右上角开始 YOLO 识别流',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                    ),
+                  ),
           ),
         ),
         
@@ -494,38 +497,13 @@ class _CameraWorkbench extends StatelessWidget {
   }
 }
 
-class _AdaptiveCameraPreview extends StatelessWidget {
-  const _AdaptiveCameraPreview({required this.camera});
-
-  final CameraController camera;
-
-  @override
-  Widget build(BuildContext context) {
-    final previewSize = camera.value.previewSize;
-    if (previewSize == null) {
-      return CameraPreview(camera);
-    }
-
-    final screenSize = MediaQuery.sizeOf(context);
-    final isPortrait = screenSize.height >= screenSize.width;
-    final previewWidth = isPortrait ? previewSize.height : previewSize.width;
-    final previewHeight = isPortrait ? previewSize.width : previewSize.height;
-
-    return ClipRect(
-      child: OverflowBox(
-        maxWidth: double.infinity,
-        maxHeight: double.infinity,
-        child: FittedBox(
-          fit: BoxFit.cover,
-          child: SizedBox(
-            width: previewWidth,
-            height: previewHeight,
-            child: CameraPreview(camera),
-          ),
-        ),
-      ),
-    );
-  }
+YOLOTask _taskFor(VisionModelType model) {
+  return switch (model) {
+    VisionModelType.builtinPersonFast => YOLOTask.detect,
+    VisionModelType.poseNano => YOLOTask.pose,
+    VisionModelType.personDetectorLite => YOLOTask.segment,
+    VisionModelType.bodyKeypointLite => YOLOTask.obb,
+  };
 }
 
 
