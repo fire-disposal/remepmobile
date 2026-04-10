@@ -5,8 +5,9 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:mqtt_client/mqtt_client.dart';
 
-import '../../core/mqtt/mqtt_models.dart';
-import '../../core/mqtt/mqtt_service.dart';
+import '../../core/events/app_event.dart';
+import '../../core/events/global_event_store.dart';
+import '../../core/mqtt/mqtt_config_service.dart';
 import '../../core/permission/permission_service.dart';
 import '../../core/utils/logger.dart';
 import 'vision_detection_models.dart';
@@ -17,12 +18,15 @@ import 'vision_detection_models.dart';
 /// 绉婚櫎浜嗘ā鍨嬪垏鎹㈠姛鑳斤紝绠€鍖栫敤鎴蜂娇鐢ㄦ祦绋?
 class VisionDetectionController extends ChangeNotifier {
   VisionDetectionController({
-    required MqttService mqttService,
+    required MqttConfigService mqttConfigService,
+    required GlobalEventStore eventStore,
     required PermissionService permissionService,
-  })  : _mqttService = mqttService,
+  })  : _mqttConfigService = mqttConfigService,
+        _eventStore = eventStore,
         _permissionService = permissionService;
 
-  final MqttService _mqttService;
+  final MqttConfigService _mqttConfigService;
+  final GlobalEventStore _eventStore;
   final PermissionService _permissionService;
 
   bool _isInitializing = false;
@@ -38,8 +42,6 @@ class VisionDetectionController extends ChangeNotifier {
 
   List<DetectionBox> _detections = const [];
   VisionEvent? _latestEvent;
-  String _mqttBroker = 'broker.hivemq.com';
-  int _mqttPort = 1883;
   int _fps = 0;
   int _inferenceFps = 0;
   int _processingLatencyMs = 0;
@@ -73,8 +75,6 @@ class VisionDetectionController extends ChangeNotifier {
 
   List<DetectionBox> get detections => _detections;
   VisionEvent? get latestEvent => _latestEvent;
-  String get mqttBroker => _mqttBroker;
-  int get mqttPort => _mqttPort;
   int get fps => _fps;
   int get inferenceFps => _inferenceFps;
   int get processingLatencyMs => _processingLatencyMs;
@@ -225,6 +225,17 @@ class VisionDetectionController extends ChangeNotifier {
       timestamp: now,
       level: _fallAlarmOn ? VisionEventLevel.warning : VisionEventLevel.info,
     );
+    _eventStore.append(
+      AppEvent(
+        id: 'vision-${now.microsecondsSinceEpoch}',
+        source: AppEventSource.vision,
+        level: _fallAlarmOn ? AppEventLevel.warning : AppEventLevel.info,
+        title: _latestEvent!.title,
+        message: _latestEvent!.detail,
+        timestamp: now,
+        payload: {'detectionCount': _detections.length},
+      ),
+    );
 
     notifyListeners();
   }
@@ -234,27 +245,7 @@ class VisionDetectionController extends ChangeNotifier {
     return null;
   }
 
-  Future<void> updateMqttConfig({required String broker, required int port}) async {
-    _mqttBroker = broker;
-    _mqttPort = port;
-
-    if (_mqttService.currentStatus == MqttConnectionStatus.connected) {
-      await _mqttService.disconnect();
-    }
-
-    await _mqttService.connect(
-      MqttConnectionConfig(
-        broker: _mqttBroker,
-        port: _mqttPort,
-        clientId: 'remep_vision_',
-      ),
-    );
-    notifyListeners();
-  }
-
   void _publishEvent() {
-    if (_mqttService.currentStatus != MqttConnectionStatus.connected) return;
-
     final payload = jsonEncode({
       'type': 'vision_fall_alert',
       'ts': DateTime.now().toIso8601String(),
@@ -263,9 +254,9 @@ class VisionDetectionController extends ChangeNotifier {
       'source': 'ultralytics_yolo_flutter_sdk',
     });
 
-    _mqttService.publish(
-      topic: 'remep/vision/events',
-      message: payload,
+    _mqttConfigService.publishJson(
+      topicSuffix: 'vision/events',
+      payload: payload,
       qos: MqttQos.atLeastOnce,
     );
   }

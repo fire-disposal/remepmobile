@@ -6,8 +6,9 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:mqtt_client/mqtt_client.dart';
 
-import '../../core/mqtt/mqtt_models.dart';
-import '../../core/mqtt/mqtt_service.dart';
+import '../../core/events/app_event.dart';
+import '../../core/events/global_event_store.dart';
+import '../../core/mqtt/mqtt_config_service.dart';
 import '../../core/utils/logger.dart';
 import 'imu_sensor_service.dart';
 
@@ -126,12 +127,9 @@ class IMUControllerState {
 /// IMU控制器
 class IMUController extends ChangeNotifier {
   final IMUSensorService _sensorService;
-  final MqttService _mqttService;
+  final MqttConfigService _mqttConfigService;
+  final GlobalEventStore _eventStore;
   static const String _tag = 'IMUController';
-
-  // MQTT 相关配置同步视觉识别模块
-  String _mqttBroker = 'broker.hivemq.com';
-  int _mqttPort = 1883;
 
   // 状态
   IMUControllerState _state = const IMUControllerState();
@@ -155,12 +153,11 @@ class IMUController extends ChangeNotifier {
 
   IMUController({
     IMUSensorService? sensorService,
-    MqttService? mqttService,
+    required MqttConfigService mqttConfigService,
+    required GlobalEventStore eventStore,
   })  : _sensorService = sensorService ?? IMUSensorService(),
-        _mqttService = mqttService ?? MqttService();
-
-  String get mqttBroker => _mqttBroker;
-  int get mqttPort => _mqttPort;
+        _mqttConfigService = mqttConfigService,
+        _eventStore = eventStore;
 
   /// 初始化并启动
   Future<void> initialize() async {
@@ -221,6 +218,17 @@ class IMUController extends ChangeNotifier {
       motionConfidence: event.confidence,
       motionEvents: List.unmodifiable(_motionEvents.toList()),
     );
+    _eventStore.append(
+      AppEvent(
+        id: 'imu-${event.timestamp.microsecondsSinceEpoch}',
+        source: AppEventSource.imu,
+        level: _toLevel(event.type),
+        title: '动作识别: ${event.type.name}',
+        message: '置信度 ${event.confidence.toStringAsFixed(2)}',
+        timestamp: event.timestamp,
+        payload: event.data,
+      ),
+    );
     notifyListeners();
 
     // 重点事件发布到 MQTT
@@ -235,28 +243,7 @@ class IMUController extends ChangeNotifier {
     AppLogger.info('[$_tag] Motion detected: ${event.type} (confidence: ${event.confidence.toStringAsFixed(2)})');
   }
 
-  /// 同步视觉模块的 MQTT 配置方法
-  Future<void> updateMqttConfig({required String broker, required int port}) async {
-    _mqttBroker = broker;
-    _mqttPort = port;
-
-    if (_mqttService.currentStatus == MqttConnectionStatus.connected) {
-      await _mqttService.disconnect();
-    }
-
-    await _mqttService.connect(
-      MqttConnectionConfig(
-        broker: _mqttBroker,
-        port: _mqttPort,
-        clientId: 'remep_imu_${DateTime.now().millisecondsSinceEpoch}',
-      ),
-    );
-    notifyListeners();
-  }
-
   void _publishMqttEvent(MotionEvent event) {
-    if (_mqttService.currentStatus != MqttConnectionStatus.connected) return;
-
     final payload = jsonEncode({
       'type': 'imu_motion_event',
       'motion': event.type.toString().split('.').last,
@@ -266,11 +253,21 @@ class IMUController extends ChangeNotifier {
       'data': event.data,
     });
 
-    _mqttService.publish(
-      topic: 'remep/imu/events',
-      message: payload,
+    _mqttConfigService.publishJson(
+      topicSuffix: 'imu/events',
+      payload: payload,
       qos: MqttQos.atLeastOnce,
     );
+  }
+
+  AppEventLevel _toLevel(MotionType type) {
+    if (type == MotionType.fall || type == MotionType.freeFall) {
+      return AppEventLevel.critical;
+    }
+    if (type == MotionType.possibleFall || type == MotionType.vigorousShake) {
+      return AppEventLevel.warning;
+    }
+    return AppEventLevel.info;
   }
 
   /// 方向变化处理

@@ -1,11 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../core/di/service_locator.dart';
+import '../../core/events/global_event_store.dart';
+import '../../core/mqtt/mqtt_config_service.dart';
 import '../../core/permission/permission_service.dart';
-import '../../core/mqtt/mqtt_service.dart';
+import '../../core/theme/design_language.dart';
 import 'imu_controller.dart';
 import 'imu_sensor_service.dart';
 import 'widgets/sensor_data_card.dart';
@@ -38,7 +39,8 @@ class _ImuMonitoringPageState extends State<ImuMonitoringPage>
     
     _controller = IMUController(
       sensorService: getIt<IMUSensorService>(),
-      mqttService: getIt<MqttService>(),
+      mqttConfigService: getIt<MqttConfigService>(),
+      eventStore: getIt<GlobalEventStore>(),
     );
     await _controller.initialize();
     
@@ -104,7 +106,7 @@ class _ImuMonitoringPageState extends State<ImuMonitoringPage>
             // 状态栏
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: AppDesignLanguage.pageHorizontalPadding, vertical: 8),
                 child: _buildStatusBar(state),
               ),
             ),
@@ -112,7 +114,7 @@ class _ImuMonitoringPageState extends State<ImuMonitoringPage>
             // 运动状态卡片
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.symmetric(horizontal: AppDesignLanguage.pageHorizontalPadding),
                 child: MotionStatusCard(
                   motionType: state.currentMotion,
                   confidence: state.motionConfidence,
@@ -124,7 +126,7 @@ class _ImuMonitoringPageState extends State<ImuMonitoringPage>
             // 数据可视化
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(AppDesignLanguage.pageHorizontalPadding),
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     if (constraints.maxWidth < 900) {
@@ -169,7 +171,7 @@ class _ImuMonitoringPageState extends State<ImuMonitoringPage>
             // 统计数据
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.symmetric(horizontal: AppDesignLanguage.pageHorizontalPadding),
                 child: _buildStatisticsCard(state.statistics),
               ),
             ),
@@ -178,7 +180,7 @@ class _ImuMonitoringPageState extends State<ImuMonitoringPage>
             if (state.latestData != null)
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(AppDesignLanguage.pageHorizontalPadding),
                   child: _buildRawDataCard(state.latestData!),
                 ),
               ),
@@ -202,7 +204,7 @@ class _ImuMonitoringPageState extends State<ImuMonitoringPage>
           : (state.isRunning
               ? Colors.green.withValues(alpha: 0.1)
               : Colors.orange.withValues(alpha: 0.1)),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppDesignLanguage.panelRadius,
         border: Border.all(
           color: isAlert
             ? Colors.red.withValues(alpha: 0.5)
@@ -263,7 +265,7 @@ class _ImuMonitoringPageState extends State<ImuMonitoringPage>
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: Colors.grey.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppDesignLanguage.panelRadius,
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -295,7 +297,7 @@ class _ImuMonitoringPageState extends State<ImuMonitoringPage>
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppDesignLanguage.panelRadius,
         border: Border.all(color: Colors.grey.withValues(alpha: 0.22)),
       ),
       child: Column(

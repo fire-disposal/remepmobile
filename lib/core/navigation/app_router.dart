@@ -7,6 +7,8 @@ import '../../pages/home/dashboard_page.dart';
 import '../../pages/launch_page.dart';
 import '../../features/imu_monitoring/imu_monitoring_page.dart';
 import '../../features/vision_detection/vision_detection_page.dart';
+import '../../features/event_center/event_center_page.dart';
+import '../../features/mqtt_settings/mqtt_settings_page.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -29,6 +31,14 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/app/vision',
       builder: (context, state) => const VisionDetectionPage(),
+    ),
+    GoRoute(
+      path: '/app/events',
+      builder: (context, state) => const EventCenterPage(),
+    ),
+    GoRoute(
+      path: '/app/mqtt',
+      builder: (context, state) => const MqttSettingsPage(),
     ),
     // 注入各业务模块定义的路由
     ...BluetoothScannerModule.routes,
