@@ -1,9 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:ultralytics_yolo/ultralytics_yolo.dart';
 
 import '../../core/di/service_locator.dart';
+import '../../core/theme/design_language.dart';
 import '../../core/widgets/cards.dart';
 import 'detection_overlay_painter.dart';
 import 'vision_detection_controller.dart';
@@ -45,7 +47,7 @@ class _VisionDetectionPageState extends State<VisionDetectionPage> {
           return _CameraWorkbench(
             controller: _controller,
             onSettingsPanelTap: () => _showSettingsPanel(context),
-            onMqttPanelTap: () => _showMqttPanel(context),
+            onMqttPanelTap: () => context.push('/app/mqtt'),
             onEventPanelTap: () => _showEventPanel(context),
           );
         },
@@ -157,33 +159,6 @@ class _VisionDetectionPageState extends State<VisionDetectionPage> {
                   ),
                 ],
               ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _showMqttPanel(BuildContext context) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (context) => SafeArea(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(context).size.height * 0.5,
-          ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('MQTT 地址配置', style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 12),
-                _MqttConfigRow(controller: _controller),
-              ],
             ),
           ),
         ),
@@ -322,7 +297,7 @@ class _CameraWorkbench extends StatelessWidget {
         // 主UI层
         SafeArea(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            padding: const EdgeInsets.fromLTRB(AppDesignLanguage.pageHorizontalPadding, 12, AppDesignLanguage.pageHorizontalPadding, AppDesignLanguage.pageHorizontalPadding),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -378,7 +353,7 @@ class _CameraWorkbench extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
       decoration: BoxDecoration(
         color: Colors.black.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppDesignLanguage.panelRadius,
       ),
       child: Row(
         children: [
@@ -463,7 +438,7 @@ class _CameraWorkbench extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: Colors.red.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppDesignLanguage.panelRadius,
         boxShadow: [
           BoxShadow(
             color: Colors.red.withValues(alpha: 0.4),
@@ -506,6 +481,11 @@ class _CameraWorkbench extends StatelessWidget {
         direction: Axis.vertical,
         spacing: 8,
         children: [
+          _QuickActionButton(
+            icon: Icons.tune_rounded,
+            label: '参数',
+            onTap: onSettingsPanelTap,
+          ),
           _QuickActionButton(
             icon: Icons.wifi_tethering,
             label: 'MQTT',
@@ -615,77 +595,6 @@ class _PermissionBlock extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _MqttConfigRow extends StatefulWidget {
-  const _MqttConfigRow({required this.controller});
-
-  final VisionDetectionController controller;
-
-  @override
-  State<_MqttConfigRow> createState() => _MqttConfigRowState();
-}
-
-class _MqttConfigRowState extends State<_MqttConfigRow> {
-  late final TextEditingController _brokerCtrl;
-  late final TextEditingController _portCtrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _brokerCtrl = TextEditingController(text: widget.controller.mqttBroker);
-    _portCtrl = TextEditingController(text: widget.controller.mqttPort.toString());
-  }
-
-  @override
-  void dispose() {
-    _brokerCtrl.dispose();
-    _portCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: TextField(
-            controller: _brokerCtrl,
-            decoration: const InputDecoration(
-              isDense: true,
-              labelText: 'Broker',
-              border: OutlineInputBorder(),
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        SizedBox(
-          width: 96,
-          child: TextField(
-            controller: _portCtrl,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              isDense: true,
-              labelText: 'Port',
-              border: OutlineInputBorder(),
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        IconButton.filled(
-          tooltip: '连接 MQTT',
-          onPressed: () async {
-            final port = int.tryParse(_portCtrl.text.trim()) ?? widget.controller.mqttPort;
-            await widget.controller.updateMqttConfig(
-              broker: _brokerCtrl.text.trim(),
-              port: port,
-            );
-          },
-          icon: const Icon(Icons.wifi_tethering),
-        ),
-      ],
     );
   }
 }

@@ -27,6 +27,20 @@ class DashboardPage extends StatelessWidget {
       route: '/app/bluetooth/scanner',
       description: '扫描周边 BLE 设备并查看信号强度',
     ),
+    _ModuleItem(
+      title: '全局事件中心',
+      icon: Icons.event_note_rounded,
+      color: Colors.orangeAccent,
+      route: '/app/events',
+      description: '统一查询 IMU / 视觉检查事件',
+    ),
+    _ModuleItem(
+      title: 'MQTT 全局配置',
+      icon: Icons.wifi_tethering_rounded,
+      color: Colors.teal,
+      route: '/app/mqtt',
+      description: '统一设置 Broker 与全局消息 Topic 前缀',
+    ),
   ];
 
   @override
