@@ -61,10 +61,12 @@ class VisionDetectionController extends ChangeNotifier {
   int _inferenceFps = 0;
   int _processingLatencyMs = 0;
   bool _fallAlarmOn = false;
+  bool _lyingOn = false;
   VisionDetectionMode _detectionMode = VisionDetectionMode.performance;
   DateTime? _lastEventLogAt;
   int? _lastDetectionCount;
   bool? _lastFallAlarmState;
+  bool? _lastLyingState;
   DateTime? _lastRuntimeLogAt;
   final List<VisionEvent> _runtimeLogs = [];
 
@@ -104,6 +106,8 @@ class VisionDetectionController extends ChangeNotifier {
   YOLOViewController get yoloController => _yoloController;
   YOLOStreamingConfig get streamingConfig => _activeStreamingConfig;
   List<VisionEvent> get runtimeLogs => List.unmodifiable(_runtimeLogs);
+  List<AppEvent> get visionEvents =>
+      _eventStore.query(const EventQuery(source: AppEventSource.vision));
 
   bool get isModelReady => _isModelReady;
   String get modelStatusMessage => _modelStatusMessage;
@@ -233,11 +237,13 @@ class VisionDetectionController extends ChangeNotifier {
     _lastEventLogAt = null;
     _lastDetectionCount = null;
     _lastFallAlarmState = null;
+    _lastLyingState = null;
     _lastRuntimeLogAt = null;
     _runtimeLogs.clear();
     _detections = [];
     _inferenceFps = 0;
     _processingLatencyMs = 0;
+    _lyingOn = false;
     
     if (_isStreaming) {
       await _applyStreamingProfile();
@@ -300,34 +306,75 @@ class VisionDetectionController extends ChangeNotifier {
       'total=$totalResults, person=${_detections.length}, maxConf=${maxConfidence.toStringAsFixed(2)}, labels=[$labelPreview], fps=$_inferenceFps, latency=${_processingLatencyMs}ms',
     );
     
-    // 跌倒检测算法：基于框的长宽比
-    final aspectRatioThreshold = algorithmParams.aspectRatioThreshold;
-    final hasAbnormalPose = _detections.any((item) {
+    // 跌倒 / 卧倒检测算法：基于框的长宽比
+    final fallThreshold = algorithmParams.aspectRatioThreshold;
+    final lieThreshold = (fallThreshold * 0.85).clamp(0.8, fallThreshold - 0.05);
+    double maxAspectRatio = 0;
+    bool hasAbnormalPose = false;
+    bool hasLyingPose = false;
+
+    for (final item in _detections) {
       final rect = item.normalizedRect;
-      return rect.width / rect.height > aspectRatioThreshold; // 框变宽/变扁
-    });
+      final ratio = rect.width / rect.height;
+      if (ratio > maxAspectRatio) {
+        maxAspectRatio = ratio;
+      }
+      if (ratio > fallThreshold) {
+        hasAbnormalPose = true;
+      } else if (ratio > lieThreshold) {
+        hasLyingPose = true;
+      }
+    }
 
     if (hasAbnormalPose && !_fallAlarmOn) {
       AppLogger.warning('检测到疑似跌倒姿态！');
-      _publishEvent();
+      _publishEvent(
+        type: 'vision_fall_alert',
+        confidence: _detections.isNotEmpty ? _detections.first.confidence : 0,
+        aspectRatio: maxAspectRatio,
+      );
+    }
+
+    if (hasLyingPose && !_lyingOn && !hasAbnormalPose) {
+      _publishEvent(
+        type: 'vision_lying_detected',
+        confidence: _detections.isNotEmpty ? _detections.first.confidence : 0,
+        aspectRatio: maxAspectRatio,
+      );
     }
     
     _fallAlarmOn = hasAbnormalPose;
+    _lyingOn = hasLyingPose && !hasAbnormalPose;
+
+    final eventTitle = _fallAlarmOn
+        ? '⚠️ 检测到异常姿态'
+        : _lyingOn
+            ? '检测到卧倒姿态'
+            : 'YOLO 运行中 (${_inferenceFps} FPS)';
+    final eventLevel = _fallAlarmOn
+        ? VisionEventLevel.warning
+        : _lyingOn
+            ? VisionEventLevel.info
+            : VisionEventLevel.info;
 
     _latestEvent = VisionEvent(
-      title: _fallAlarmOn ? '⚠️ 检测到异常姿态' : 'YOLO 运行中 (${_inferenceFps} FPS)',
+      title: eventTitle,
       detail: '视野内有 ${_detections.length} 个目标。',
       timestamp: now,
-      level: _fallAlarmOn ? VisionEventLevel.warning : VisionEventLevel.info,
+      level: eventLevel,
     );
 
-    final shouldLog = _shouldLogEvent(now, _detections.length, _fallAlarmOn);
+    final shouldLog = _shouldLogEvent(now, _detections.length, _fallAlarmOn, _lyingOn);
     if (shouldLog) {
       _eventStore.append(
         AppEvent(
           id: 'vision-${now.microsecondsSinceEpoch}',
           source: AppEventSource.vision,
-          level: _fallAlarmOn ? AppEventLevel.warning : AppEventLevel.info,
+          level: _fallAlarmOn
+              ? AppEventLevel.critical
+              : _lyingOn
+                  ? AppEventLevel.warning
+                  : AppEventLevel.info,
           title: _latestEvent!.title,
           message: _latestEvent!.detail,
           timestamp: now,
@@ -337,6 +384,7 @@ class VisionDetectionController extends ChangeNotifier {
       _lastEventLogAt = now;
       _lastDetectionCount = _detections.length;
       _lastFallAlarmState = _fallAlarmOn;
+      _lastLyingState = _lyingOn;
     }
 
     notifyListeners();
@@ -406,12 +454,18 @@ class VisionDetectionController extends ChangeNotifier {
     }
   }
 
-  bool _shouldLogEvent(DateTime now, int detectionCount, bool fallAlarmOn) {
+  bool _shouldLogEvent(
+    DateTime now,
+    int detectionCount,
+    bool fallAlarmOn,
+    bool lyingOn,
+  ) {
     if (_lastEventLogAt == null) return true;
     final elapsed = now.difference(_lastEventLogAt!);
     final countChanged = _lastDetectionCount != detectionCount;
     final alarmChanged = _lastFallAlarmState != fallAlarmOn;
-    return alarmChanged || countChanged || elapsed.inMilliseconds >= 1000;
+    final lyingChanged = _lastLyingState != lyingOn;
+    return alarmChanged || lyingChanged || countChanged || elapsed.inMilliseconds >= 1000;
   }
 
   YOLOStreamingConfig _buildStreamingConfig() {
@@ -454,11 +508,16 @@ class VisionDetectionController extends ChangeNotifier {
     _hasAppliedProfile = true;
   }
 
-  void _publishEvent() {
+  void _publishEvent({
+    required String type,
+    required double confidence,
+    double? aspectRatio,
+  }) {
     final payload = jsonEncode({
-      'type': 'vision_fall_alert',
+      'type': type,
       'ts': DateTime.now().toIso8601String(),
-      'confidence': _detections.isNotEmpty ? _detections.first.confidence : 0,
+      'confidence': confidence,
+      'aspectRatio': aspectRatio,
       'model': _fixedModel.label,
       'source': 'ultralytics_yolo_flutter_sdk',
     });

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:ultralytics_yolo/ultralytics_yolo.dart';
 
 import '../../core/di/service_locator.dart';
+import '../../core/events/app_event.dart';
 import '../../core/theme/design_language.dart';
 import '../../core/widgets/cards.dart';
 import 'detection_overlay_painter.dart';
@@ -23,6 +24,7 @@ class VisionDetectionPage extends StatefulWidget {
 
 class _VisionDetectionPageState extends State<VisionDetectionPage> {
   late final VisionDetectionController _controller;
+  bool _showLiveLog = true;
 
   @override
   void initState() {
@@ -48,6 +50,8 @@ class _VisionDetectionPageState extends State<VisionDetectionPage> {
             onSettingsPanelTap: () => _showAlgorithmPanel(context),
             onModelPanelTap: () => _showModelPanel(context),
             onEventPanelTap: () => _showEventPanel(context),
+            showLiveLog: _showLiveLog,
+            onToggleLiveLog: () => setState(() => _showLiveLog = !_showLiveLog),
           );
         },
       ),
@@ -70,90 +74,98 @@ class _VisionDetectionPageState extends State<VisionDetectionPage> {
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 18),
               child: Column(
-                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('跌倒检测算法参数', style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: 16),
-                  _AlgorithmSlider(
-                    label: '识别框长宽比阈值',
-                    value: _controller.algorithmParams.aspectRatioThreshold,
-                    min: 0.6,
-                    max: 1.6,
-                    divisions: 20,
-                    formatValue: (v) => v.toStringAsFixed(2),
-                    onChanged: (value) {
-                      _controller.updateAlgorithmParams(
-                        _controller.algorithmParams.copyWith(aspectRatioThreshold: value),
-                      );
-                    },
-                  ),
-                  _AlgorithmSlider(
-                    label: '垂直速度阈值',
-                    value: _controller.algorithmParams.verticalSpeedThreshold,
-                    min: 0.1,
-                    max: 1.0,
-                    divisions: 18,
-                    formatValue: (v) => v.toStringAsFixed(2),
-                    onChanged: (value) {
-                      _controller.updateAlgorithmParams(
-                        _controller.algorithmParams.copyWith(verticalSpeedThreshold: value),
-                      );
-                    },
-                  ),
-                  _AlgorithmSlider(
-                    label: '跌倒角度阈值',
-                    value: _controller.algorithmParams.fallAngleThreshold,
-                    min: 45,
-                    max: 90,
-                    divisions: 9,
-                    formatValue: (v) => '${v.toStringAsFixed(0)}°',
-                    onChanged: (value) {
-                      _controller.updateAlgorithmParams(
-                        _controller.algorithmParams.copyWith(fallAngleThreshold: value),
-                      );
-                    },
-                  ),
-                  _AlgorithmSlider(
-                    label: '时间窗口',
-                    value: _controller.algorithmParams.timeWindowMs.toDouble(),
-                    min: 800,
-                    max: 5000,
-                    divisions: 21,
-                    formatValue: (v) => '${v.toStringAsFixed(0)}ms',
-                    onChanged: (value) {
-                      _controller.updateAlgorithmParams(
-                        _controller.algorithmParams.copyWith(timeWindowMs: value.round()),
-                      );
-                    },
-                  ),
-                  _AlgorithmSlider(
-                    label: '关键点置信度阈值',
-                    value: _controller.algorithmParams.keypointConfidenceThreshold,
-                    min: 0.1,
-                    max: 0.8,
-                    divisions: 14,
-                    formatValue: (v) => v.toStringAsFixed(2),
-                    onChanged: (value) {
-                      _controller.updateAlgorithmParams(
-                        _controller.algorithmParams.copyWith(keypointConfidenceThreshold: value),
-                      );
-                    },
-                  ),
-                  _AlgorithmSlider(
-                    label: '最小关键点数量',
-                    value: _controller.algorithmParams.minKeyPoints.toDouble(),
-                    min: 3,
-                    max: 12,
-                    divisions: 9,
-                    formatValue: (v) => v.toStringAsFixed(0),
-                    onChanged: (value) {
-                      _controller.updateAlgorithmParams(
-                        _controller.algorithmParams.copyWith(minKeyPoints: value.round()),
-                      );
-                    },
-                  ),
                   const SizedBox(height: 12),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _AlgorithmSlider(
+                            label: '识别框长宽比阈值',
+                            value: _controller.algorithmParams.aspectRatioThreshold,
+                            min: 0.6,
+                            max: 1.6,
+                            divisions: 20,
+                            formatValue: (v) => v.toStringAsFixed(2),
+                            onChanged: (value) {
+                              _controller.updateAlgorithmParams(
+                                _controller.algorithmParams.copyWith(aspectRatioThreshold: value),
+                              );
+                            },
+                          ),
+                          _AlgorithmSlider(
+                            label: '垂直速度阈值',
+                            value: _controller.algorithmParams.verticalSpeedThreshold,
+                            min: 0.1,
+                            max: 1.0,
+                            divisions: 18,
+                            formatValue: (v) => v.toStringAsFixed(2),
+                            onChanged: (value) {
+                              _controller.updateAlgorithmParams(
+                                _controller.algorithmParams.copyWith(verticalSpeedThreshold: value),
+                              );
+                            },
+                          ),
+                          _AlgorithmSlider(
+                            label: '跌倒角度阈值',
+                            value: _controller.algorithmParams.fallAngleThreshold,
+                            min: 45,
+                            max: 90,
+                            divisions: 9,
+                            formatValue: (v) => '${v.toStringAsFixed(0)}°',
+                            onChanged: (value) {
+                              _controller.updateAlgorithmParams(
+                                _controller.algorithmParams.copyWith(fallAngleThreshold: value),
+                              );
+                            },
+                          ),
+                          _AlgorithmSlider(
+                            label: '时间窗口',
+                            value: _controller.algorithmParams.timeWindowMs.toDouble(),
+                            min: 800,
+                            max: 5000,
+                            divisions: 21,
+                            formatValue: (v) => '${v.toStringAsFixed(0)}ms',
+                            onChanged: (value) {
+                              _controller.updateAlgorithmParams(
+                                _controller.algorithmParams.copyWith(timeWindowMs: value.round()),
+                              );
+                            },
+                          ),
+                          _AlgorithmSlider(
+                            label: '关键点置信度阈值',
+                            value: _controller.algorithmParams.keypointConfidenceThreshold,
+                            min: 0.1,
+                            max: 0.8,
+                            divisions: 14,
+                            formatValue: (v) => v.toStringAsFixed(2),
+                            onChanged: (value) {
+                              _controller.updateAlgorithmParams(
+                                _controller.algorithmParams.copyWith(keypointConfidenceThreshold: value),
+                              );
+                            },
+                          ),
+                          _AlgorithmSlider(
+                            label: '最小关键点数量',
+                            value: _controller.algorithmParams.minKeyPoints.toDouble(),
+                            min: 3,
+                            max: 12,
+                            divisions: 9,
+                            formatValue: (v) => v.toStringAsFixed(0),
+                            onChanged: (value) {
+                              _controller.updateAlgorithmParams(
+                                _controller.algorithmParams.copyWith(minKeyPoints: value.round()),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                   Row(
                     children: [
                       OutlinedButton.icon(
@@ -298,18 +310,30 @@ class _VisionDetectionPageState extends State<VisionDetectionPage> {
                 Text('状态与事件', style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 12),
                 Flexible(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        ModernCard(
-                          borderRadius: BorderRadius.circular(16),
-                          child: _EventBar(event: _controller.latestEvent),
-                        ),
-                        const SizedBox(height: 100),
-                      ],
-                    ),
+                  child: AnimatedBuilder(
+                    animation: _controller,
+                    builder: (context, _) {
+                      final events = _controller.visionEvents.take(50).toList(growable: false);
+                      if (events.isEmpty) {
+                        return Center(
+                          child: Text(
+                            '暂无事件',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        );
+                      }
+                      return ListView.separated(
+                        itemCount: events.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 8),
+                        itemBuilder: (context, index) {
+                          final item = events[index];
+                          return ModernCard(
+                            borderRadius: BorderRadius.circular(16),
+                            child: _AppEventTile(event: item),
+                          );
+                        },
+                      );
+                    },
                   ),
                 ),
               ],
@@ -327,12 +351,16 @@ class _CameraWorkbench extends StatelessWidget {
     required this.onSettingsPanelTap,
     required this.onModelPanelTap,
     required this.onEventPanelTap,
+    required this.showLiveLog,
+    required this.onToggleLiveLog,
   });
 
   final VisionDetectionController controller;
   final VoidCallback onSettingsPanelTap;
   final VoidCallback onModelPanelTap;
   final VoidCallback onEventPanelTap;
+  final bool showLiveLog;
+  final VoidCallback onToggleLiveLog;
 
   @override
   Widget build(BuildContext context) {
@@ -424,37 +452,15 @@ class _CameraWorkbench extends StatelessWidget {
                 // 性能指标栏
                 _buildMetricsRow(),
 
-                const SizedBox(height: 10),
-
-                // 实时日志面板
-                _buildLiveLogPanel(context),
-                
-                // 检测统计
-                if (controller.detections.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: _MetricBadge(
-                      text: '检测到 ${controller.detections.length} 个目标',
-                      color: Colors.purpleAccent,
-                      icon: Icons.person_outline,
-                      compact: true,
-                    ),
-                  ),
-                
                 const Spacer(),
                 
                 // 底部区域
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    // 左下角：跌倒告警
-                    if (controller.fallAlarmOn)
-                      _buildFallAlarmBadge()
-                    else
-                      const SizedBox.shrink(),
-                    
-                    const Spacer(),
-                    
+                    // 左下角：日志面板
+                    Flexible(child: _buildBottomLeftPanel(context)),
+                    const SizedBox(width: 12),
                     // 右侧：快捷操作按钮组
                     _buildQuickActionButtons(),
                   ],
@@ -528,16 +534,23 @@ class _CameraWorkbench extends StatelessWidget {
     return Row(
       children: [
         _MetricBadge(
-          text: '推理FPS ${controller.inferenceFps}',
+          text: '${controller.inferenceFps}',
           color: Colors.blueAccent,
           icon: Icons.speed,
           compact: true,
         ),
         const SizedBox(width: 8),
         _MetricBadge(
-          text: '${controller.processingLatencyMs}ms',
+          text: '${controller.processingLatencyMs}',
           color: Colors.green,
           icon: Icons.timer,
+          compact: true,
+        ),
+        const SizedBox(width: 8),
+        _MetricBadge(
+          text: '${controller.detections.length}',
+          color: Colors.purpleAccent,
+          icon: Icons.person_outline,
           compact: true,
         ),
         const Spacer(),
@@ -591,34 +604,66 @@ class _CameraWorkbench extends StatelessWidget {
 
   /// 构建快捷操作按钮组
   Widget _buildQuickActionButtons() {
-    return Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(16),
+    return IntrinsicWidth(
+      child: Container(
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.3),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Wrap(
+          direction: Axis.vertical,
+          spacing: 6,
+          children: [
+            _QuickActionButton(
+              icon: Icons.tune_rounded,
+              label: '算法',
+              onTap: onSettingsPanelTap,
+            ),
+            _QuickActionButton(
+              icon: Icons.cloud_download_outlined,
+              label: '模型',
+              onTap: onModelPanelTap,
+            ),
+            _QuickActionButton(
+              icon: showLiveLog ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+              label: '日志',
+              onTap: onToggleLiveLog,
+            ),
+            _QuickActionButton(
+              icon: Icons.event_note_rounded,
+              label: '事件',
+              onTap: onEventPanelTap,
+              showBadge: controller.latestEvent != null &&
+                         controller.latestEvent!.level == VisionEventLevel.error,
+            ),
+          ],
+        ),
       ),
-      child: Wrap(
-        direction: Axis.vertical,
-        spacing: 8,
-        children: [
-          _QuickActionButton(
-            icon: Icons.tune_rounded,
-            label: '算法',
-            onTap: onSettingsPanelTap,
-          ),
-          _QuickActionButton(
-            icon: Icons.cloud_download_outlined,
-            label: '模型',
-            onTap: onModelPanelTap,
-          ),
-          _QuickActionButton(
-            icon: Icons.event_note_rounded,
-            label: '事件',
-            onTap: onEventPanelTap,
-            showBadge: controller.latestEvent != null &&
-                       controller.latestEvent!.level == VisionEventLevel.error,
-          ),
-        ],
+    );
+  }
+
+  Widget _buildBottomLeftPanel(BuildContext context) {
+    const double actionButtonHeight = 40;
+    const double actionSpacing = 8;
+    const double containerPadding = 16;
+    const int buttonCount = 4;
+    const double logPanelWidth = 260;
+    const double panelHeight =
+        buttonCount * actionButtonHeight + (buttonCount - 1) * actionSpacing + containerPadding;
+
+    return SizedBox(
+      width: logPanelWidth,
+      height: panelHeight,
+      child: Align(
+        alignment: Alignment.bottomLeft,
+        child: showLiveLog
+            ? SizedBox(
+                height: panelHeight,
+                width: logPanelWidth,
+                child: _buildLiveLogPanel(context),
+              )
+            : const SizedBox.shrink(),
       ),
     );
   }
@@ -656,35 +701,42 @@ class _CameraWorkbench extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          if (logs.isEmpty)
-            const Text(
-              '等待推理输出...',
-              style: TextStyle(color: Colors.white54, fontSize: 12),
-            )
-          else
-            ...logs.map(
-              (item) => Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item.timeLabel,
-                      style: const TextStyle(color: Colors.white54, fontSize: 11),
+          Expanded(
+            child: logs.isEmpty
+                ? const Align(
+                    alignment: Alignment.topLeft,
+                    child: Text(
+                      '等待推理输出...',
+                      style: TextStyle(color: Colors.white54, fontSize: 12),
                     ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        '${item.title} · ${item.detail}',
-                        style: const TextStyle(color: Colors.white70, fontSize: 12),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+                  )
+                : ListView.separated(
+                    padding: EdgeInsets.zero,
+                    itemCount: logs.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 4),
+                    itemBuilder: (context, index) {
+                      final item = logs[index];
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.timeLabel,
+                            style: const TextStyle(color: Colors.white54, fontSize: 11),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              '${item.title} · ${item.detail}',
+                              style: const TextStyle(color: Colors.white70, fontSize: 12),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+          ),
         ],
       ),
     );
@@ -715,11 +767,11 @@ class _QuickActionButton extends StatelessWidget {
             backgroundColor: Colors.black.withValues(alpha: 0.45),
             foregroundColor: Colors.white,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            minimumSize: const Size(0, 40),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            minimumSize: const Size(0, 36),
           ),
-          icon: Icon(icon, size: 18),
-          label: Text(label, style: const TextStyle(fontSize: 13)),
+          icon: Icon(icon, size: 16),
+          label: Text(label, style: const TextStyle(fontSize: 12)),
         ),
         if (showBadge)
           Positioned(
@@ -738,6 +790,7 @@ class _QuickActionButton extends StatelessWidget {
     );
   }
 }
+
 
 class _AlgorithmSlider extends StatelessWidget {
   const _AlgorithmSlider({
@@ -970,6 +1023,90 @@ class _EventBar extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _AppEventTile extends StatelessWidget {
+  const _AppEventTile({required this.event});
+
+  final AppEvent event;
+
+  Color _levelColor(BuildContext context) {
+    return switch (event.level) {
+      AppEventLevel.critical => Colors.red,
+      AppEventLevel.warning => Colors.orange,
+      _ => Theme.of(context).colorScheme.primary,
+    };
+  }
+
+  IconData _levelIcon() {
+    return switch (event.level) {
+      AppEventLevel.critical => Icons.notifications_active_rounded,
+      AppEventLevel.warning => Icons.warning_rounded,
+      _ => Icons.notifications_rounded,
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final levelColor = _levelColor(context);
+    final timeLabel =
+      '${event.timestamp.hour.toString().padLeft(2, '0')}:${event.timestamp.minute.toString().padLeft(2, '0')}:${event.timestamp.second.toString().padLeft(2, '0')}';
+
+    return Padding(
+      padding: const EdgeInsets.all(12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(_levelIcon(), color: levelColor, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: levelColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        event.level.name.toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: levelColor,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      timeLabel,
+                      style: Theme.of(context)
+                          .textTheme
+                          .labelSmall
+                          ?.copyWith(color: Colors.grey),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  event.title,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  event.message,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
