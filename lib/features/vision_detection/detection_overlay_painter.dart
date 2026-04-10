@@ -80,11 +80,6 @@ class DetectionOverlayPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0;
     
-    // 绘制屏幕中心的十字准星
-    final center = Offset(size.width / 2, size.height / 2);
-    canvas.drawLine(center - const Offset(20, 0), center + const Offset(20, 0), paint);
-    canvas.drawLine(center - const Offset(0, 20), center + const Offset(0, 20), paint);
-    
     // 绘制四个角的对角基线，增加“侦测中”的氛围感
     final cornerLen = 30.0;
     // 左上

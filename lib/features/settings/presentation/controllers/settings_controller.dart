@@ -71,7 +71,13 @@ class SettingsController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 请求特定权限
+  /// 请求特定的模块权限
+  Future<void> requestModulePermissions(AppModule module) async {
+    await _permissionService.requestModulePermissions(module);
+    await refreshPermissions();
+  }
+
+  /// 请求特定的权限
   Future<void> requestPermission(AppPermission permission) async {
     await _permissionService.requestPermission(permission);
     await refreshPermissions();
@@ -79,25 +85,34 @@ class SettingsController extends ChangeNotifier {
 
   /// 请求视觉识别模块依赖权限
   Future<void> requestVisionPermissions() async {
-    await _permissionService.requestVisionDetectionPermissions();
-    await refreshPermissions();
+    await requestModulePermissions(AppModule.visionDetection);
   }
 
   /// 请求IMU监测模块依赖权限
   Future<Map<AppPermission, AppPermissionStatus>> requestIMUPermissions() async {
-    final result = await _permissionService.requestIMUPermissions();
+    final result = await _permissionService.requestModulePermissions(AppModule.imuMonitoring);
     await refreshPermissions();
     return result;
   }
 
+  /// 检查模块权限状态
+  Future<bool> checkModulePermissions(AppModule module) async {
+    return _permissionService.checkModulePermissions(module);
+  }
+
+  /// 获取未授权的模块权限
+  Future<List<AppPermission>> getDeniedPermissionsForModule(AppModule module) async {
+    return _permissionService.getDeniedPermissionsForModule(module);
+  }
+
   /// 检查IMU权限状态
   Future<bool> checkIMUPermissions() async {
-    return _permissionService.checkIMUPermissions();
+    return checkModulePermissions(AppModule.imuMonitoring);
   }
 
   /// 获取未授权的IMU权限
   Future<List<AppPermission>> getDeniedIMUPermissions() async {
-    return _permissionService.getDeniedIMUPermissions();
+    return getDeniedPermissionsForModule(AppModule.imuMonitoring);
   }
 
   /// 打开系统设置

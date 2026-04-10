@@ -9,6 +9,7 @@ import 'package:mqtt_client/mqtt_client.dart';
 import '../../core/events/app_event.dart';
 import '../../core/events/global_event_store.dart';
 import '../../core/mqtt/mqtt_config_service.dart';
+import '../../core/permission/permission_service.dart';
 import '../../core/utils/logger.dart';
 import 'imu_sensor_service.dart';
 
@@ -129,6 +130,7 @@ class IMUController extends ChangeNotifier {
   final IMUSensorService _sensorService;
   final MqttConfigService _mqttConfigService;
   final GlobalEventStore _eventStore;
+  final PermissionService _permissionService;
   static const String _tag = 'IMUController';
 
   // 状态
@@ -155,16 +157,24 @@ class IMUController extends ChangeNotifier {
     IMUSensorService? sensorService,
     required MqttConfigService mqttConfigService,
     required GlobalEventStore eventStore,
+    required PermissionService permissionService,
   })  : _sensorService = sensorService ?? IMUSensorService(),
         _mqttConfigService = mqttConfigService,
-        _eventStore = eventStore;
+        _eventStore = eventStore,
+        _permissionService = permissionService;
 
   /// 初始化并启动
   Future<void> initialize() async {
     AppLogger.info('[$_tag] Initializing IMU controller...');
     
-    _state = _state.copyWith(hasPermission: true);
+    final hasPermission = await _permissionService.checkModulePermissions(AppModule.imuMonitoring);
+    _state = _state.copyWith(hasPermission: hasPermission);
     notifyListeners();
+
+    if (!hasPermission) {
+      AppLogger.warning('[$_tag] Missing permissions for IMU monitoring');
+      return;
+    }
 
     // 订阅数据流
     _dataSubscription = _sensorService.dataStream.listen(_onDataReceived);
@@ -175,6 +185,19 @@ class IMUController extends ChangeNotifier {
     _statsTimer = Timer.periodic(const Duration(seconds: 1), (_) => _updateStatistics());
 
     await start();
+  }
+
+  /// 重新校验权限
+  Future<void> refreshPermission() async {
+    final hasPermission = await _permissionService.checkModulePermissions(AppModule.imuMonitoring);
+    _state = _state.copyWith(hasPermission: hasPermission);
+    notifyListeners();
+  }
+
+  /// 请求权限
+  Future<void> requestPermission() async {
+    await _permissionService.requestModulePermissions(AppModule.imuMonitoring);
+    await refreshPermission();
   }
 
   /// 启动传感器
@@ -226,7 +249,7 @@ class IMUController extends ChangeNotifier {
         title: '动作识别: ${event.type.name}',
         message: '置信度 ${event.confidence.toStringAsFixed(2)}',
         timestamp: event.timestamp,
-        payload: event.data,
+        payload: event.data ?? <String, dynamic>{},
       ),
     );
     notifyListeners();

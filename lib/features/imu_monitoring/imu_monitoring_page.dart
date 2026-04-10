@@ -32,16 +32,7 @@ class _ImuMonitoringPageState extends State<ImuMonitoringPage>
   }
 
   Future<void> _init() async {
-    final permissionService = getIt<PermissionService>();
-    
-    // 直接请求所需权限
-    await permissionService.requestIMUPermissions();
-    
-    _controller = IMUController(
-      sensorService: getIt<IMUSensorService>(),
-      mqttConfigService: getIt<MqttConfigService>(),
-      eventStore: getIt<GlobalEventStore>(),
-    );
+    _controller = getIt<IMUController>();
     await _controller.initialize();
     
     if (mounted) {

@@ -23,9 +23,23 @@ enum AppPermission {
   notification,
 }
 
+/// 模块类型
+enum AppModule {
+  visionDetection,
+  imuMonitoring,
+  bluetoothScanner,
+}
+
 /// 权限服务
 /// 统一管理应用权限请求和检查
 class PermissionService {
+  /// 各模块所需的权限映射
+  static const Map<AppModule, List<AppPermission>> modulePermissions = {
+    AppModule.visionDetection: [AppPermission.camera],
+    AppModule.imuMonitoring: [], // 基础传感器无需权限
+    AppModule.bluetoothScanner: [AppPermission.bluetooth, AppPermission.location],
+  };
+
   static const List<AppPermission> visionDetectionRequiredPermissions = [
     AppPermission.camera,
   ];
@@ -255,6 +269,41 @@ class PermissionService {
   Future<bool> isPermanentlyDenied(AppPermission permission) async {
     final status = await checkPermission(permission);
     return status == AppPermissionStatus.permanentlyDenied;
+  }
+
+  /// 获取模块所需的所有权限
+  List<AppPermission> getPermissionsForModule(AppModule module) {
+    return modulePermissions[module] ?? [];
+  }
+
+  /// 检查模块的所有权限是否已授予
+  Future<bool> checkModulePermissions(AppModule module) async {
+    final permissions = getPermissionsForModule(module);
+    if (permissions.isEmpty) return true;
+    
+    final statuses = await checkPermissions(permissions);
+    return statuses.values.every((status) => status == AppPermissionStatus.granted);
+  }
+
+  /// 请求模块所需的所有权限
+  Future<Map<AppPermission, AppPermissionStatus>> requestModulePermissions(AppModule module) async {
+    final permissions = getPermissionsForModule(module);
+    if (permissions.isEmpty) return {};
+    
+    return requestPermissions(permissions);
+  }
+
+  /// 获取模块未授予的权限
+  Future<List<AppPermission>> getDeniedPermissionsForModule(AppModule module) async {
+    final permissions = getPermissionsForModule(module);
+    final result = <AppPermission>[];
+    
+    for (final p in permissions) {
+      if (!await isGranted(p)) {
+        result.add(p);
+      }
+    }
+    return result;
   }
 
   /// 打开应用设置页面

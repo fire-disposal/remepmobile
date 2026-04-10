@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:ultralytics_yolo/ultralytics_yolo.dart';
 
 import '../../core/di/service_locator.dart';
@@ -46,8 +45,8 @@ class _VisionDetectionPageState extends State<VisionDetectionPage> {
         builder: (context, _) {
           return _CameraWorkbench(
             controller: _controller,
-            onSettingsPanelTap: () => _showSettingsPanel(context),
-            onMqttPanelTap: () => context.push('/app/mqtt'),
+            onSettingsPanelTap: () => _showAlgorithmPanel(context),
+            onModelPanelTap: () => _showModelPanel(context),
             onEventPanelTap: () => _showEventPanel(context),
           );
         },
@@ -55,8 +54,8 @@ class _VisionDetectionPageState extends State<VisionDetectionPage> {
     );
   }
 
-  /// 显示设置面板（识别模式选择）
-  Future<void> _showSettingsPanel(BuildContext context) async {
+  /// 显示算法参数面板
+  Future<void> _showAlgorithmPanel(BuildContext context) async {
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -74,10 +73,133 @@ class _VisionDetectionPageState extends State<VisionDetectionPage> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('检测设置', style: Theme.of(context).textTheme.titleMedium),
+                  Text('跌倒检测算法参数', style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 16),
-                  
-                  // 当前模型信息
+                  _AlgorithmSlider(
+                    label: '识别框长宽比阈值',
+                    value: _controller.algorithmParams.aspectRatioThreshold,
+                    min: 0.6,
+                    max: 1.6,
+                    divisions: 20,
+                    formatValue: (v) => v.toStringAsFixed(2),
+                    onChanged: (value) {
+                      _controller.updateAlgorithmParams(
+                        _controller.algorithmParams.copyWith(aspectRatioThreshold: value),
+                      );
+                    },
+                  ),
+                  _AlgorithmSlider(
+                    label: '垂直速度阈值',
+                    value: _controller.algorithmParams.verticalSpeedThreshold,
+                    min: 0.1,
+                    max: 1.0,
+                    divisions: 18,
+                    formatValue: (v) => v.toStringAsFixed(2),
+                    onChanged: (value) {
+                      _controller.updateAlgorithmParams(
+                        _controller.algorithmParams.copyWith(verticalSpeedThreshold: value),
+                      );
+                    },
+                  ),
+                  _AlgorithmSlider(
+                    label: '跌倒角度阈值',
+                    value: _controller.algorithmParams.fallAngleThreshold,
+                    min: 45,
+                    max: 90,
+                    divisions: 9,
+                    formatValue: (v) => '${v.toStringAsFixed(0)}°',
+                    onChanged: (value) {
+                      _controller.updateAlgorithmParams(
+                        _controller.algorithmParams.copyWith(fallAngleThreshold: value),
+                      );
+                    },
+                  ),
+                  _AlgorithmSlider(
+                    label: '时间窗口',
+                    value: _controller.algorithmParams.timeWindowMs.toDouble(),
+                    min: 800,
+                    max: 5000,
+                    divisions: 21,
+                    formatValue: (v) => '${v.toStringAsFixed(0)}ms',
+                    onChanged: (value) {
+                      _controller.updateAlgorithmParams(
+                        _controller.algorithmParams.copyWith(timeWindowMs: value.round()),
+                      );
+                    },
+                  ),
+                  _AlgorithmSlider(
+                    label: '关键点置信度阈值',
+                    value: _controller.algorithmParams.keypointConfidenceThreshold,
+                    min: 0.1,
+                    max: 0.8,
+                    divisions: 14,
+                    formatValue: (v) => v.toStringAsFixed(2),
+                    onChanged: (value) {
+                      _controller.updateAlgorithmParams(
+                        _controller.algorithmParams.copyWith(keypointConfidenceThreshold: value),
+                      );
+                    },
+                  ),
+                  _AlgorithmSlider(
+                    label: '最小关键点数量',
+                    value: _controller.algorithmParams.minKeyPoints.toDouble(),
+                    min: 3,
+                    max: 12,
+                    divisions: 9,
+                    formatValue: (v) => v.toStringAsFixed(0),
+                    onChanged: (value) {
+                      _controller.updateAlgorithmParams(
+                        _controller.algorithmParams.copyWith(minKeyPoints: value.round()),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: _controller.resetAlgorithmParams,
+                        icon: const Icon(Icons.restart_alt_rounded),
+                        label: const Text('恢复默认'),
+                      ),
+                      const Spacer(),
+                      FilledButton.icon(
+                        style: FilledButton.styleFrom(minimumSize: const Size(140, 42)),
+                        onPressed: _controller.toggleStreaming,
+                        icon: Icon(_controller.isStreaming ? Icons.pause_rounded : Icons.play_arrow_rounded),
+                        label: Text(_controller.isStreaming ? '暂停识别流' : '启动识别流'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 显示模型管理面板
+  Future<void> _showModelPanel(BuildContext context) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (context) => AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) => SafeArea(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.6,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 18),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('模型管理', style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 16),
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -86,9 +208,7 @@ class _VisionDetectionPageState extends State<VisionDetectionPage> {
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.memory, 
-                             size: 20, 
-                             color: Theme.of(context).colorScheme.primary),
+                        Icon(Icons.memory, size: 20, color: Theme.of(context).colorScheme.primary),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(
@@ -104,10 +224,12 @@ class _VisionDetectionPageState extends State<VisionDetectionPage> {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                '基于 Ultralytics 官方目标检测模型',
+                                _controller.modelStatusMessage,
                                 style: TextStyle(
                                   fontSize: 12,
-                                  color: Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
+                                  color: _controller.isModelReady
+                                      ? Theme.of(context).colorScheme.onPrimaryContainer
+                                      : Theme.of(context).colorScheme.error,
                                 ),
                               ),
                             ],
@@ -116,46 +238,37 @@ class _VisionDetectionPageState extends State<VisionDetectionPage> {
                       ],
                     ),
                   ),
-                  
-                  const SizedBox(height: 24),
-                  
-                  // 识别模式选择
-                  Text('识别模式', style: Theme.of(context).textTheme.bodySmall),
                   const SizedBox(height: 12),
-                  ...VisionDetectionMode.values.map((mode) {
-                    final isSelected = _controller.detectionMode == mode;
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      elevation: isSelected ? 2 : 0,
-                      color: isSelected 
-                          ? Theme.of(context).colorScheme.primaryContainer 
-                          : null,
-                      child: ListTile(
-                        dense: true,
-                        title: Text(
-                          mode.label,
-                          style: TextStyle(
-                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                          ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: LinearProgressIndicator(
+                          value: _controller.modelState.isDownloading
+                              ? _controller.modelState.progress
+                              : (_controller.modelState.isDownloaded ? 1 : 0),
+                          minHeight: 6,
+                          backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                         ),
-                        subtitle: Text(mode.description),
-                        trailing: isSelected
-                            ? Icon(Icons.check_circle, 
-                                   color: Theme.of(context).colorScheme.primary)
-                            : null,
-                        onTap: () => _controller.setDetectionMode(mode),
                       ),
-                    );
-                  }),
-                  
-                  const Spacer(),
-                  
-                  // 控制按钮
-                  FilledButton.icon(
-                    style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(42)),
-                    onPressed: _controller.toggleStreaming,
-                    icon: Icon(_controller.isStreaming ? Icons.pause_rounded : Icons.play_arrow_rounded),
-                    label: Text(_controller.isStreaming ? '暂停识别流' : '启动识别流'),
+                      const SizedBox(width: 12),
+                      FilledButton.tonal(
+                        onPressed: _controller.modelState.isDownloading
+                            ? null
+                            : (_controller.canDownloadModel ? _controller.downloadModel : null),
+                        child: Text(
+                          _controller.modelState.isDownloaded
+                              ? '已下载'
+                              : (_controller.modelState.isDownloading ? '下载中' : '下载模型'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  SwitchListTile.adaptive(
+                    value: _controller.preferDownloadedModel,
+                    onChanged: (value) => _controller.setPreferDownloadedModel(value),
+                    title: const Text('优先使用已下载模型'),
+                    subtitle: const Text('关闭后将回退使用内置模型'),
                   ),
                 ],
               ),
@@ -212,13 +325,13 @@ class _CameraWorkbench extends StatelessWidget {
   const _CameraWorkbench({
     required this.controller,
     required this.onSettingsPanelTap,
-    required this.onMqttPanelTap,
+    required this.onModelPanelTap,
     required this.onEventPanelTap,
   });
 
   final VisionDetectionController controller;
   final VoidCallback onSettingsPanelTap;
-  final VoidCallback onMqttPanelTap;
+  final VoidCallback onModelPanelTap;
   final VoidCallback onEventPanelTap;
 
   @override
@@ -232,15 +345,17 @@ class _CameraWorkbench extends StatelessWidget {
       children: [
         // 官方 YOLO SDK 组件：内置相机预览 + 推理
         Positioned.fill(
-          child: AspectRatio(
-            aspectRatio: 1.0, // 强制 1:1，匹配 YOLO 模型输入并解决物理裁剪导致的比率偏移
-            child: YOLOView(
-              modelPath: controller.yoloModelPath,
-              task: YOLOTask.detect,
-              onResult: (results) {
-                controller.onYoloResult(results.cast<dynamic>());
-              },
-            ),
+          child: YOLOView(
+            modelPath: controller.yoloModelPath,
+            task: YOLOTask.detect,
+            controller: controller.yoloController,
+            streamingConfig: controller.streamingConfig,
+            showNativeUI: false,
+            showOverlays: false,
+            onPerformanceMetrics: controller.onYoloPerformanceMetrics,
+            onResult: (results) {
+              controller.onYoloResult(results);
+            },
           ),
         ),
         
@@ -308,6 +423,11 @@ class _CameraWorkbench extends StatelessWidget {
                 
                 // 性能指标栏
                 _buildMetricsRow(),
+
+                const SizedBox(height: 10),
+
+                // 实时日志面板
+                _buildLiveLogPanel(context),
                 
                 // 检测统计
                 if (controller.detections.isNotEmpty)
@@ -483,13 +603,13 @@ class _CameraWorkbench extends StatelessWidget {
         children: [
           _QuickActionButton(
             icon: Icons.tune_rounded,
-            label: '参数',
+            label: '算法',
             onTap: onSettingsPanelTap,
           ),
           _QuickActionButton(
-            icon: Icons.wifi_tethering,
-            label: 'MQTT',
-            onTap: onMqttPanelTap,
+            icon: Icons.cloud_download_outlined,
+            label: '模型',
+            onTap: onModelPanelTap,
           ),
           _QuickActionButton(
             icon: Icons.event_note_rounded,
@@ -498,6 +618,73 @@ class _CameraWorkbench extends StatelessWidget {
             showBadge: controller.latestEvent != null &&
                        controller.latestEvent!.level == VisionEventLevel.error,
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLiveLogPanel(BuildContext context) {
+    final logs = controller.runtimeLogs.take(6).toList(growable: false);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.monitor_heart_outlined, color: Colors.white70, size: 16),
+              const SizedBox(width: 6),
+              Text(
+                '实时日志',
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: Colors.white70,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+              const Spacer(),
+              Text(
+                controller.isStreaming ? '推理中' : '待机',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: controller.isStreaming ? Colors.greenAccent : Colors.white54,
+                    ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (logs.isEmpty)
+            const Text(
+              '等待推理输出...',
+              style: TextStyle(color: Colors.white54, fontSize: 12),
+            )
+          else
+            ...logs.map(
+              (item) => Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.timeLabel,
+                      style: const TextStyle(color: Colors.white54, fontSize: 11),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        '${item.title} · ${item.detail}',
+                        style: const TextStyle(color: Colors.white70, fontSize: 12),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -548,6 +735,63 @@ class _QuickActionButton extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+class _AlgorithmSlider extends StatelessWidget {
+  const _AlgorithmSlider({
+    required this.label,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.divisions,
+    required this.formatValue,
+    required this.onChanged,
+  });
+
+  final String label;
+  final double value;
+  final double min;
+  final double max;
+  final int divisions;
+  final String Function(double value) formatValue;
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+              Text(
+                formatValue(value),
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: Theme.of(context).colorScheme.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+            ],
+          ),
+          Slider(
+            value: value.clamp(min, max),
+            min: min,
+            max: max,
+            divisions: divisions,
+            label: formatValue(value),
+            onChanged: onChanged,
+          ),
+        ],
+      ),
     );
   }
 }

@@ -33,12 +33,10 @@ class MqttRuntimeConfig {
 
 class MqttConfigService extends ChangeNotifier {
   MqttConfigService(this._cache, this._mqttService)
-      : _config = MqttRuntimeConfig(
-          broker: EnvConstants.mqttBrokerUrl.isNotEmpty
-              ? EnvConstants.mqttBrokerUrl
-              : 'broker.hivemq.com',
-          port: EnvConstants.mqttPort,
-          baseTopic: MqttTopics.baseTopic,
+      : _config = const MqttRuntimeConfig(
+          broker: 'broker.hivemq.com',
+          port: 1883,
+          baseTopic: 'remep/mobile',
         );
 
   final CacheStorageService _cache;
@@ -52,9 +50,15 @@ class MqttConfigService extends ChangeNotifier {
   MqttRuntimeConfig get config => _config;
 
   Future<void> initialize() async {
-    _config = _config.copyWith(
-      broker: _cache.read<String>(_brokerKey) ?? _config.broker,
-      port: _cache.read<int>(_portKey) ?? _config.port,
+    // 从环境变量加载初始值
+    String broker = EnvConstants.mqttBrokerUrl;
+    if (broker.isEmpty) {
+      broker = 'broker.hivemq.com';
+    }
+    
+    _config = MqttRuntimeConfig(
+      broker: _cache.read<String>(_brokerKey) ?? broker,
+      port: _cache.read<int>(_portKey) ?? EnvConstants.mqttPort,
       baseTopic: _cache.read<String>(_baseTopicKey) ?? _config.baseTopic,
     );
     notifyListeners();
