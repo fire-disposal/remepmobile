@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../../core/di/service_locator.dart';
 import '../../core/permission/permission_service.dart';
+import '../../core/mqtt/mqtt_service.dart';
 import 'imu_controller.dart';
 import 'imu_sensor_service.dart';
 import 'widgets/sensor_data_card.dart';

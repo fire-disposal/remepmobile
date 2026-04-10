@@ -666,12 +666,16 @@ class MotionStatusCard extends StatelessWidget {
     switch (type) {
       case MotionType.stationary:
         return '静止';
+      case MotionType.moving:
+        return '轻微移动';
       case MotionType.walking:
         return '行走';
       case MotionType.running:
         return '跑步';
       case MotionType.shake:
         return '摇晃';
+      case MotionType.vigorousShake:
+        return '剧烈摇晃';
       case MotionType.freeFall:
         return '自由落体';
       case MotionType.possibleFall:

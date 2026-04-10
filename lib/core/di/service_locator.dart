@@ -2,6 +2,7 @@
 import '../../features/settings/settings_module.dart';
 import '../../features/bluetooth_scanner/bluetooth_scanner_module.dart';
 import '../../features/vision_detection/vision_detection_controller.dart';
+import '../../features/imu_monitoring/imu_sensor_service.dart';
 import '../bluetooth/bluetooth_service.dart';
 import '../mqtt/mqtt_service.dart';
 import '../permission/permission_service.dart';
@@ -25,6 +26,7 @@ Future<void> setupServiceLocator() async {
   getIt.registerLazySingleton<MqttService>(() => MqttService());
   getIt.registerLazySingleton<PermissionService>(() => PermissionService());
   getIt.registerLazySingleton<BluetoothService>(() => BluetoothService());
+  getIt.registerLazySingleton<IMUSensorService>(() => IMUSensorService());
   getIt.registerLazySingleton<VisionDetectionController>(
     () => VisionDetectionController(
       mqttService: getIt<MqttService>(),

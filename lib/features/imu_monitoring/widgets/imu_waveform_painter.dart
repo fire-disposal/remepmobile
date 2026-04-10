@@ -282,11 +282,7 @@ class OrientationSpherePainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.5;
       canvas.drawCircle(Offset(gravityX, gravityY), 10, ringPaint);
-    }
-  }
       
-      canvas.drawCircle(Offset(gravityX, gravityY), 8, pointPaint);
-
       // 绘制重力线
       final linePaint = Paint()
         ..color = Colors.red.withValues(alpha: 0.5)
