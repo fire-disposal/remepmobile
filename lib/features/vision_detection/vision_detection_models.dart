@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+/// 视觉检测数据模型
+/// 
+/// 移除了多模型支持，现在只使用固定的 YOLO11n Detect 模型
+
 /// 事件级别
 enum VisionEventLevel {
   info,
@@ -10,9 +14,7 @@ enum VisionEventLevel {
 
 /// 算法参数配置
 /// 
-/// 支持两种算法：
-/// 1. 关键点关系分析 - 基于17个关键点的空间关系判断跌倒
-/// 2. 识别框趋势分析 - 基于检测框的时序变化判断跌倒
+/// 用于跌倒检测的阈值参数
 class AlgorithmParams {
   /// 关键点置信度阈值
   final double keypointConfidenceThreshold;
@@ -41,26 +43,16 @@ class AlgorithmParams {
     required this.minKeyPoints,
   });
 
-  /// 创建默认参数
+  /// 创建默认参数（用于识别框趋势分析）
   factory AlgorithmParams.defaultFor(VisionAlgorithmType algorithm) {
-    return switch (algorithm) {
-      VisionAlgorithmType.keypointRelation => const AlgorithmParams(
-          keypointConfidenceThreshold: 0.3,
-          timeWindowMs: 1500,
-          fallAngleThreshold: 60.0,  // 躯干角度超过60度认为可能跌倒
-          aspectRatioThreshold: 1.2,
-          verticalSpeedThreshold: 0.3,
-          minKeyPoints: 8,  // 至少需要8个有效关键点
-        ),
-      VisionAlgorithmType.bboxTrend => const AlgorithmParams(
-          keypointConfidenceThreshold: 0.3,
-          timeWindowMs: 2000,
-          fallAngleThreshold: 70.0,
-          aspectRatioThreshold: 1.0,  // 框变扁认为跌倒
-          verticalSpeedThreshold: 0.4,  // 快速下降
-          minKeyPoints: 5,
-        ),
-    };
+    return const AlgorithmParams(
+      keypointConfidenceThreshold: 0.3,
+      timeWindowMs: 2000,
+      fallAngleThreshold: 70.0,
+      aspectRatioThreshold: 1.0,  // 框变扁认为跌倒
+      verticalSpeedThreshold: 0.4,  // 快速下降
+      minKeyPoints: 5,
+    );
   }
 
   /// 复制并修改参数
@@ -83,6 +75,7 @@ class AlgorithmParams {
   }
 }
 
+/// 识别模式
 enum VisionDetectionMode {
   balanced('平衡', '通用场景，稳定与灵敏度均衡'),
   performance('流畅优先', '减少处理负载，优先保证画面流畅'),
@@ -94,29 +87,9 @@ enum VisionDetectionMode {
   const VisionDetectionMode(this.label, this.description);
 }
 
-enum VisionModelType {
-  builtinPersonFast('YOLO11n Detect', 'Ultralytics 官方目标检测模型（推荐）', Colors.lightBlue),
-  poseNano('YOLO11n Pose', 'Ultralytics 官方人体姿态模型', Colors.teal),
-  personDetectorLite('YOLO11n Seg', 'Ultralytics 官方实例分割模型', Colors.orange),
-  bodyKeypointLite('YOLO11n OBB', 'Ultralytics 官方旋转框检测模型', Colors.purple);
-
-  final String label;
-  final String description;
-  final Color accent;
-
-  const VisionModelType(this.label, this.description, this.accent);
-
-  /// 简短标签，用于紧凑显示
-  String get shortLabel => switch (this) {
-    VisionModelType.builtinPersonFast => 'Detect',
-    VisionModelType.poseNano => 'Pose',
-    VisionModelType.personDetectorLite => 'Seg',
-    VisionModelType.bodyKeypointLite => 'OBB',
-  };
-}
-
+/// 视觉算法类型
 enum VisionAlgorithmType {
-  keypointRelation('关键点关系', '基于17个关键点空间关系判断跌倒姿态'),
+  keypointRelation('关键点关系', '基于关键点空间关系判断跌倒姿态'),
   bboxTrend('识别框趋势', '基于检测框长宽比和垂直速度变化判断');
 
   final String label;
@@ -124,25 +97,17 @@ enum VisionAlgorithmType {
 
   const VisionAlgorithmType(this.label, this.description);
 
-  /// 简短标签，用于紧凑显示
+  /// 简短标签
   String get shortLabel => switch (this) {
     VisionAlgorithmType.keypointRelation => 'KeyRel',
     VisionAlgorithmType.bboxTrend => 'BBox',
   };
 }
 
+/// 识别模式预设扩展
 extension VisionDetectionModePresetX on VisionDetectionMode {
   AlgorithmParams presetFor(VisionAlgorithmType algorithm) {
     return switch ((this, algorithm)) {
-      (VisionDetectionMode.performance, VisionAlgorithmType.keypointRelation) =>
-        const AlgorithmParams(
-          keypointConfidenceThreshold: 0.4,
-          timeWindowMs: 1800,
-          fallAngleThreshold: 68.0,
-          aspectRatioThreshold: 1.2,
-          verticalSpeedThreshold: 0.35,
-          minKeyPoints: 9,
-        ),
       (VisionDetectionMode.performance, VisionAlgorithmType.bboxTrend) =>
         const AlgorithmParams(
           keypointConfidenceThreshold: 0.35,
@@ -150,15 +115,6 @@ extension VisionDetectionModePresetX on VisionDetectionMode {
           fallAngleThreshold: 70.0,
           aspectRatioThreshold: 1.15,
           verticalSpeedThreshold: 0.45,
-          minKeyPoints: 6,
-        ),
-      (VisionDetectionMode.sensitive, VisionAlgorithmType.keypointRelation) =>
-        const AlgorithmParams(
-          keypointConfidenceThreshold: 0.22,
-          timeWindowMs: 1200,
-          fallAngleThreshold: 52.0,
-          aspectRatioThreshold: 1.15,
-          verticalSpeedThreshold: 0.25,
           minKeyPoints: 6,
         ),
       (VisionDetectionMode.sensitive, VisionAlgorithmType.bboxTrend) =>
@@ -181,7 +137,39 @@ enum VisionOutputKind {
   detectionBox,
 }
 
-/// 模型运行画像：将模型、算法和绘制绑定在一起
+/// 模型类型
+/// 
+/// 现在只保留一个固定模型：YOLO11n Detect
+enum VisionModelType {
+  builtinPersonFast('YOLO11n Detect', 'Ultralytics 官方目标检测模型', Colors.lightBlue);
+
+  final String label;
+  final String description;
+  final Color accent;
+
+  const VisionModelType(this.label, this.description, this.accent);
+
+  /// 简短标签
+  String get shortLabel => 'Detect';
+
+  /// YOLO 模型标识符
+  String get yoloModelId => 'yolo11n';
+
+  /// 绑定算法
+  VisionAlgorithmType get boundAlgorithm => VisionAlgorithmType.bboxTrend;
+
+  /// 绑定输出形态
+  VisionOutputKind get outputKind => VisionOutputKind.detectionBox;
+
+  /// 管道配置
+  VisionPipelineProfile get pipeline => VisionPipelineProfile(
+    model: this,
+    algorithm: boundAlgorithm,
+    outputKind: outputKind,
+  );
+}
+
+/// 视觉管道画像
 class VisionPipelineProfile {
   final VisionModelType model;
   final VisionAlgorithmType algorithm;
@@ -195,39 +183,12 @@ class VisionPipelineProfile {
 
   String get shortLabel => '${model.shortLabel}/${algorithm.shortLabel}';
 
-  String get description => switch (outputKind) {
-    VisionOutputKind.keypoints => '关键点模型：使用${algorithm.label}，显示骨架关键点',
-    VisionOutputKind.detectionBox => '识别框模型：使用${algorithm.label}，显示检测框',
-  };
+  String get modelName => model.label;
+
+  String get description => '目标检测模型：使用${algorithm.label}，显示检测框';
 }
 
-extension VisionModelProfileX on VisionModelType {
-  String get yoloModelId => switch (this) {
-    VisionModelType.builtinPersonFast => 'yolo11n',
-    VisionModelType.poseNano => 'yolo11n-pose',
-    VisionModelType.personDetectorLite => 'yolo11n-seg',
-    VisionModelType.bodyKeypointLite => 'yolo11n-obb',
-  };
-
-  /// 模型绑定算法，不再独立选择
-  VisionAlgorithmType get boundAlgorithm => switch (this) {
-    VisionModelType.builtinPersonFast || VisionModelType.poseNano => VisionAlgorithmType.keypointRelation,
-    VisionModelType.personDetectorLite || VisionModelType.bodyKeypointLite => VisionAlgorithmType.bboxTrend,
-  };
-
-  /// 模型绑定输出形态（决定绘制方式）
-  VisionOutputKind get outputKind => switch (this) {
-    VisionModelType.builtinPersonFast || VisionModelType.poseNano => VisionOutputKind.keypoints,
-    VisionModelType.personDetectorLite || VisionModelType.bodyKeypointLite => VisionOutputKind.detectionBox,
-  };
-
-  VisionPipelineProfile get pipeline => VisionPipelineProfile(
-        model: this,
-        algorithm: boundAlgorithm,
-        outputKind: outputKind,
-      );
-}
-
+/// 权限状态
 enum VisionPermissionState {
   unknown,
   granted,
@@ -237,10 +198,10 @@ enum VisionPermissionState {
 
 /// 关键点定义
 class KeyPoint {
-  final Offset normalizedPosition; // 0-1范围内的坐标
+  final Offset normalizedPosition;
   final double confidence;
-  final int index; // 关键点索引（COCO格式）
-  final String name; // 关键点名称
+  final int index;
+  final String name;
 
   const KeyPoint({
     required this.normalizedPosition,
@@ -250,16 +211,13 @@ class KeyPoint {
   });
 }
 
-/// 检测框（支持关键点）
+/// 检测框
 class DetectionBox {
   final Rect normalizedRect;
   final String label;
   final double confidence;
-  
-  /// 关键点列表（可选）
   final List<KeyPoint>? keyPoints;
-  
-  /// 是否包含关键点数据
+
   bool get hasKeyPoints => keyPoints != null && keyPoints!.isNotEmpty;
 
   const DetectionBox({
@@ -270,6 +228,7 @@ class DetectionBox {
   });
 }
 
+/// 视觉事件
 class VisionEvent {
   final String title;
   final String detail;
@@ -290,7 +249,6 @@ class VisionEvent {
     return '$hour:$min:$sec';
   }
 
-  /// 获取事件级别对应的颜色
   Color getLevelColor() {
     return switch (level) {
       VisionEventLevel.info => Colors.blue,
@@ -301,6 +259,7 @@ class VisionEvent {
   }
 }
 
+/// 重力感应数据
 class GravitySnapshot {
   final double x;
   final double y;
@@ -320,49 +279,16 @@ class GravitySnapshot {
 }
 
 /// 模型清单
-/// 
-/// 定义了模型的元数据，包括下载地址、校验信息等
 class ModelManifest {
   final VisionModelType type;
   final String fileName;
-  
-  /// 模型下载URL
-  /// 
-  /// 推荐使用的可靠模型源：
-  /// 1. **自托管CDN** (推荐生产环境)
-  ///    - 阿里云OSS: https://your-bucket.oss-cn-region.aliyuncs.com/models/xxx.tflite
-  ///    - 腾讯云COS: https://your-bucket.cos.region.myqcloud.com/models/xxx.tflite
-  ///    - AWS S3: https://your-bucket.s3.region.amazonaws.com/models/xxx.tflite
-  /// 
-  /// 2. **GitHub Release** (适合开源项目)
-  ///    - https://github.com/your-org/your-repo/releases/download/v1.0.0/xxx.tflite
-  /// 
-  /// 3. **Hugging Face** (适合AI模型)
-  ///    - https://huggingface.co/your-username/your-model/resolve/main/xxx.tflite
-  /// 
-  /// 4. **备用镜像** (建议配置多个源)
-  ///    - 主地址失败时自动尝试备用地址
   final String downloadUrl;
-  
-  /// 备用下载地址列表
   final List<String> mirrorUrls;
-  
-  /// 文件大小（字节），用于验证下载完整性
   final int? expectedSize;
-  
-  /// SHA256校验和，用于验证文件完整性
   final String? expectedSha256;
-  
-  /// 模型版本号
   final String version;
-  
-  /// 最低支持的App版本
   final String? minAppVersion;
-  
-  /// 模型格式类型
   final ModelFormat format;
-  
-  /// 显示大小标签
   final String sizeLabel;
   final bool builtIn;
 
@@ -379,14 +305,12 @@ class ModelManifest {
     required this.sizeLabel,
     this.builtIn = false,
   });
-  
-  /// 获取所有可用的下载URL（主地址+备用地址）
+
   List<String> get allUrls {
     if (downloadUrl.isEmpty) return mirrorUrls;
     return [downloadUrl, ...mirrorUrls];
   }
-  
-  /// 检查是否配置了下载地址
+
   bool get hasDownloadUrl => downloadUrl.isNotEmpty || mirrorUrls.isNotEmpty;
 }
 
@@ -397,6 +321,7 @@ enum ModelFormat {
   quantizedTflite,
 }
 
+/// 模型运行时状态
 class ModelRuntimeState {
   final ModelManifest manifest;
   final bool isDownloaded;

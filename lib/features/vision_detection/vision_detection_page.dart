@@ -5,9 +5,14 @@ import 'package:ultralytics_yolo/ultralytics_yolo.dart';
 
 import '../../core/di/service_locator.dart';
 import '../../core/widgets/cards.dart';
+import 'detection_overlay_painter.dart';
 import 'vision_detection_controller.dart';
 import 'vision_detection_models.dart';
 
+/// 视觉检测页面
+/// 
+/// 使用固定 YOLO11n Detect 模型进行目标检测
+/// 移除了模型切换功能，简化用户使用流程
 class VisionDetectionPage extends StatefulWidget {
   const VisionDetectionPage({super.key});
 
@@ -39,7 +44,7 @@ class _VisionDetectionPageState extends State<VisionDetectionPage> {
         builder: (context, _) {
           return _CameraWorkbench(
             controller: _controller,
-            onAlgorithmPanelTap: () => _showAlgorithmPanel(context),
+            onSettingsPanelTap: () => _showSettingsPanel(context),
             onMqttPanelTap: () => _showMqttPanel(context),
             onEventPanelTap: () => _showEventPanel(context),
           );
@@ -48,7 +53,8 @@ class _VisionDetectionPageState extends State<VisionDetectionPage> {
     );
   }
 
-  Future<void> _showAlgorithmPanel(BuildContext context) async {
+  /// 显示设置面板（识别模式选择）
+  Future<void> _showSettingsPanel(BuildContext context) async {
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -58,7 +64,7 @@ class _VisionDetectionPageState extends State<VisionDetectionPage> {
         builder: (context, _) => SafeArea(
           child: ConstrainedBox(
             constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.75,
+              maxHeight: MediaQuery.of(context).size.height * 0.6,
             ),
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 18),
@@ -66,87 +72,83 @@ class _VisionDetectionPageState extends State<VisionDetectionPage> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('算法切换', style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: 12),
-                  // 使用 Flexible + SingleChildScrollView 支持内容滚动
-                  Flexible(
-                    child: SingleChildScrollView(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // 当前绑定算法描述
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(Icons.info_outline, 
-                                     size: 18, 
-                                     color: Theme.of(context).colorScheme.primary),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    _controller.selectedPipeline.description,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Theme.of(context).colorScheme.onPrimaryContainer,
-                                    ),
-                                  ),
+                  Text('检测设置', style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 16),
+                  
+                  // 当前模型信息
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.memory, 
+                             size: 20, 
+                             color: Theme.of(context).colorScheme.primary),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'YOLO11n Detect',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Theme.of(context).colorScheme.onPrimaryContainer,
                                 ),
-                              ],
-                            ),
-                          ),
-                          
-                          const SizedBox(height: 16),
-                          
-                          Text('可用算法', style: Theme.of(context).textTheme.bodySmall),
-                          const SizedBox(height: 8),
-                          ..._controller.modelStates.map((state) {
-                            final model = state.manifest.type;
-                            final enabled = state.manifest.builtIn || state.isDownloaded;
-                            return Card(
-                              child: ListTile(
-                                dense: true,
-                                title: Text(model.pipeline.shortLabel),
-                                subtitle: Text(model.pipeline.description),
-                                trailing: _controller.selectedModel == model
-                                    ? const Icon(Icons.check_circle, color: Colors.green)
-                                    : null,
-                                enabled: enabled,
-                                onTap: enabled
-                                    ? () => _controller.switchAlgorithmByModel(model)
-                                    : null,
                               ),
-                            );
-                          }),
-
-                          const SizedBox(height: 16),
-                          Text('识别模式', style: Theme.of(context).textTheme.bodySmall),
-                          const SizedBox(height: 8),
-                          SegmentedButton<VisionDetectionMode>(
-                            segments: VisionDetectionMode.values
-                                .map(
-                                  (mode) => ButtonSegment<VisionDetectionMode>(
-                                    value: mode,
-                                    label: Text(mode.label),
-                                  ),
-                                )
-                                .toList(),
-                            selected: {_controller.detectionMode},
-                            onSelectionChanged: (values) {
-                              _controller.setDetectionMode(values.first);
-                            },
+                              const SizedBox(height: 2),
+                              Text(
+                                '基于 Ultralytics 官方目标检测模型',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                   
-                  // 控制按钮固定在底部
+                  const SizedBox(height: 24),
+                  
+                  // 识别模式选择
+                  Text('识别模式', style: Theme.of(context).textTheme.bodySmall),
+                  const SizedBox(height: 12),
+                  ...VisionDetectionMode.values.map((mode) {
+                    final isSelected = _controller.detectionMode == mode;
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      elevation: isSelected ? 2 : 0,
+                      color: isSelected 
+                          ? Theme.of(context).colorScheme.primaryContainer 
+                          : null,
+                      child: ListTile(
+                        dense: true,
+                        title: Text(
+                          mode.label,
+                          style: TextStyle(
+                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                          ),
+                        ),
+                        subtitle: Text(mode.description),
+                        trailing: isSelected
+                            ? Icon(Icons.check_circle, 
+                                   color: Theme.of(context).colorScheme.primary)
+                            : null,
+                        onTap: () => _controller.setDetectionMode(mode),
+                      ),
+                    );
+                  }),
+                  
+                  const Spacer(),
+                  
+                  // 控制按钮
                   FilledButton.icon(
                     style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(42)),
                     onPressed: _controller.toggleStreaming,
@@ -207,7 +209,6 @@ class _VisionDetectionPageState extends State<VisionDetectionPage> {
               children: [
                 Text('状态与事件', style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 12),
-                // 使用 Flexible + SingleChildScrollView 支持内容滚动
                 Flexible(
                   child: SingleChildScrollView(
                     child: Column(
@@ -218,7 +219,6 @@ class _VisionDetectionPageState extends State<VisionDetectionPage> {
                           borderRadius: BorderRadius.circular(16),
                           child: _EventBar(event: _controller.latestEvent),
                         ),
-                        // 预留空间用于显示更多事件历史
                         const SizedBox(height: 100),
                       ],
                     ),
@@ -236,13 +236,13 @@ class _VisionDetectionPageState extends State<VisionDetectionPage> {
 class _CameraWorkbench extends StatelessWidget {
   const _CameraWorkbench({
     required this.controller,
-    required this.onAlgorithmPanelTap,
+    required this.onSettingsPanelTap,
     required this.onMqttPanelTap,
     required this.onEventPanelTap,
   });
 
   final VisionDetectionController controller;
-  final VoidCallback onAlgorithmPanelTap;
+  final VoidCallback onSettingsPanelTap;
   final VoidCallback onMqttPanelTap;
   final VoidCallback onEventPanelTap;
 
@@ -255,29 +255,53 @@ class _CameraWorkbench extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        // 官方 YOLO SDK 组件：内置相机预览 + 推理 + 叠加层
+        // 官方 YOLO SDK 组件：内置相机预览 + 推理
         Positioned.fill(
-          child: IgnorePointer(
-            ignoring: !controller.isStreaming,
-            child: controller.isStreaming
-                ? YOLOView(
-                    modelPath: controller.yoloModelPath,
-                    task: _taskFor(controller.selectedModel),
-                    onResult: (results) {
-                      controller.onYoloResult(results.cast<dynamic>());
-                    },
-                  )
-                : const ColoredBox(
-                    color: Colors.black,
-                    child: Center(
-                      child: Text(
-                        '点击右上角开始 YOLO 识别流',
-                        style: TextStyle(color: Colors.white70),
-                      ),
-                    ),
-                  ),
+          child: AspectRatio(
+            aspectRatio: 1.0, // 强制 1:1，匹配 YOLO 模型输入并解决物理裁剪导致的比率偏移
+            child: YOLOView(
+              modelPath: controller.yoloModelPath,
+              task: YOLOTask.detect,
+              onResult: (results) {
+                controller.onYoloResult(results.cast<dynamic>());
+              },
+            ),
           ),
         ),
+        
+        // 当未启动识别流时的遮罩层（保持相机预览可见但提示用户）
+        if (!controller.isStreaming)
+          Positioned.fill(
+            child: Container(
+              color: Colors.black.withValues(alpha: 0.4),
+              child: const Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.videocam_off_outlined, color: Colors.white70, size: 48),
+                    SizedBox(height: 16),
+                    Text(
+                      '点击右上角开始 YOLO 识别推理',
+                      style: TextStyle(color: Colors.white70, fontSize: 16),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        
+        // 识别框绘制层 - 仅在流启动且有检测结果时显示
+        if (controller.isStreaming)
+          Positioned.fill(
+            child: CustomPaint(
+              painter: DetectionOverlayPainter(
+                controller.detections,
+                outputKind: controller.selectedPipeline.outputKind,
+                drawEmptyIndicator: true, // 新增：如果流启动但没框，绘制十字准星或提示
+              ),
+              size: Size.infinite,
+            ),
+          ),
         
         // 渐变遮罩层
         const DecoratedBox(
@@ -295,25 +319,36 @@ class _CameraWorkbench extends StatelessWidget {
           ),
         ),
         
-        // 主UI层 - 使用SafeArea确保不侵入系统区域
-        // 注意：旋转由系统控制，UI始终以初始形态展示
+        // 主UI层
         SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // 顶部栏：返回按钮 + 标题 + 播放/暂停
+                // 顶部栏
                 _buildTopBar(context),
                 
                 const SizedBox(height: 12),
                 
-                // 性能指标栏：FPS + 延迟 + 模型信息（同一行紧凑布局）
+                // 性能指标栏
                 _buildMetricsRow(),
+                
+                // 检测统计
+                if (controller.detections.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: _MetricBadge(
+                      text: '检测到 ${controller.detections.length} 个目标',
+                      color: Colors.purpleAccent,
+                      icon: Icons.person_outline,
+                      compact: true,
+                    ),
+                  ),
                 
                 const Spacer(),
                 
-                // 底部区域：跌倒告警 + 快捷操作按钮
+                // 底部区域
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
@@ -394,9 +429,6 @@ class _CameraWorkbench extends StatelessWidget {
   }
 
   /// 构建性能指标行
-  /// 
-  /// 紧凑布局：FPS | 延迟 | 模型信息（右侧）
-  /// 所有 badge 使用统一的 compact 样式确保高度一致
   Widget _buildMetricsRow() {
     return Row(
       children: [
@@ -414,11 +446,11 @@ class _CameraWorkbench extends StatelessWidget {
           compact: true,
         ),
         const Spacer(),
-        // 模型信息放在同一行右侧
+        // 识别模型标签
         _MetricBadge(
-          text: controller.selectedPipeline.shortLabel,
+          text: controller.selectedPipeline.modelName,
           color: Colors.orangeAccent,
-          icon: Icons.memory,
+          icon: Icons.api_rounded,
           compact: true,
         ),
       ],
@@ -475,11 +507,6 @@ class _CameraWorkbench extends StatelessWidget {
         spacing: 8,
         children: [
           _QuickActionButton(
-            icon: Icons.tune_rounded,
-            label: '算法',
-            onTap: onAlgorithmPanelTap,
-          ),
-          _QuickActionButton(
             icon: Icons.wifi_tethering,
             label: 'MQTT',
             onTap: onMqttPanelTap,
@@ -497,30 +524,17 @@ class _CameraWorkbench extends StatelessWidget {
   }
 }
 
-YOLOTask _taskFor(VisionModelType model) {
-  return switch (model) {
-    VisionModelType.builtinPersonFast => YOLOTask.detect,
-    VisionModelType.poseNano => YOLOTask.pose,
-    VisionModelType.personDetectorLite => YOLOTask.segment,
-    VisionModelType.bodyKeypointLite => YOLOTask.obb,
-  };
-}
-
-
-
 class _QuickActionButton extends StatelessWidget {
   const _QuickActionButton({
     required this.icon,
     required this.label,
     required this.onTap,
-    this.isActive = false,
     this.showBadge = false,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-  final bool isActive;
   final bool showBadge;
 
   @override
@@ -531,27 +545,15 @@ class _QuickActionButton extends StatelessWidget {
         FilledButton.tonalIcon(
           onPressed: onTap,
           style: FilledButton.styleFrom(
-            backgroundColor: isActive 
-                ? Colors.blue.withValues(alpha: 0.6)
-                : Colors.black.withValues(alpha: 0.45),
+            backgroundColor: Colors.black.withValues(alpha: 0.45),
             foregroundColor: Colors.white,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             minimumSize: const Size(0, 40),
           ),
-          icon: isActive 
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  ),
-                )
-              : Icon(icon, size: 18),
+          icon: Icon(icon, size: 18),
           label: Text(label, style: const TextStyle(fontSize: 13)),
         ),
-        // 通知徽章
         if (showBadge)
           Positioned(
             right: -2,
@@ -616,7 +618,6 @@ class _PermissionBlock extends StatelessWidget {
     );
   }
 }
-
 
 class _MqttConfigRow extends StatefulWidget {
   const _MqttConfigRow({required this.controller});

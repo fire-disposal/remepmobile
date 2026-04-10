@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 import 'package:mqtt_client/mqtt_client.dart';
@@ -10,6 +11,10 @@ import '../../core/permission/permission_service.dart';
 import '../../core/utils/logger.dart';
 import 'vision_detection_models.dart';
 
+/// 瑙嗚妫€娴嬫帶鍒跺櫒
+/// 
+/// 浣跨敤鍥哄畾妯″瀷 YOLO11n Detect 杩涜鐩爣妫€娴?
+/// 绉婚櫎浜嗘ā鍨嬪垏鎹㈠姛鑳斤紝绠€鍖栫敤鎴蜂娇鐢ㄦ祦绋?
 class VisionDetectionController extends ChangeNotifier {
   VisionDetectionController({
     required MqttService mqttService,
@@ -24,8 +29,10 @@ class VisionDetectionController extends ChangeNotifier {
   bool _isStreaming = false;
   bool _isModelLoading = false;
 
-  VisionModelType _selectedModel = VisionModelType.builtinPersonFast;
-  VisionAlgorithmType _selectedAlgorithm = VisionModelType.builtinPersonFast.boundAlgorithm;
+  // 鍥哄畾浣跨敤 YOLO11n Detect 妯″瀷
+  static const VisionModelType _fixedModel = VisionModelType.builtinPersonFast;
+  static const VisionAlgorithmType _fixedAlgorithm = VisionAlgorithmType.bboxTrend;
+  
   VisionPermissionState _permissionState = VisionPermissionState.unknown;
   final GravitySnapshot _gravitySnapshot = const GravitySnapshot(x: 0, y: 0, z: 9.8);
 
@@ -37,57 +44,30 @@ class VisionDetectionController extends ChangeNotifier {
   int _inferenceFps = 0;
   int _processingLatencyMs = 0;
   bool _fallAlarmOn = false;
-  String? _modelLoadError;
-  VisionDetectionMode _detectionMode = VisionDetectionMode.balanced;
+  VisionDetectionMode _detectionMode = VisionDetectionMode.performance;
 
   DateTime? _lastInferenceAt;
   final List<DateTime> _recentFrames = [];
 
-  static const List<ModelManifest> _manifests = [
-    ModelManifest(
-      type: VisionModelType.builtinPersonFast,
+  // 妯″瀷鐘舵€?- 鍥哄畾涓哄凡灏辩华
+  static const ModelRuntimeState _modelState = ModelRuntimeState(
+    manifest: ModelManifest(
+      type: _fixedModel,
       fileName: 'yolo11n.tflite',
       downloadUrl: '',
-      sizeLabel: '内置',
+      sizeLabel: '鍐呯疆',
       builtIn: true,
       format: ModelFormat.tflite,
     ),
-    ModelManifest(
-      type: VisionModelType.poseNano,
-      fileName: 'yolo11n-pose.tflite',
-      downloadUrl: '',
-      sizeLabel: '内置',
-      builtIn: true,
-      format: ModelFormat.tflite,
-    ),
-    ModelManifest(
-      type: VisionModelType.personDetectorLite,
-      fileName: 'yolo11n-seg.tflite',
-      downloadUrl: '',
-      sizeLabel: '内置',
-      builtIn: true,
-      format: ModelFormat.tflite,
-    ),
-    ModelManifest(
-      type: VisionModelType.bodyKeypointLite,
-      fileName: 'yolo11n-obb.tflite',
-      downloadUrl: '',
-      sizeLabel: '内置',
-      builtIn: true,
-      format: ModelFormat.tflite,
-    ),
-  ];
+    isDownloaded: true,
+  );
 
-  final Map<VisionModelType, ModelRuntimeState> _modelStates = {
-    for (final manifest in _manifests)
-      manifest.type: ModelRuntimeState(manifest: manifest, isDownloaded: true),
-  };
-
+  // Getters
   bool get isInitializing => _isInitializing;
   bool get isStreaming => _isStreaming;
-  VisionModelType get selectedModel => _selectedModel;
-  VisionPipelineProfile get selectedPipeline => _selectedModel.pipeline;
-  VisionAlgorithmType get selectedAlgorithm => _selectedAlgorithm;
+  VisionModelType get selectedModel => _fixedModel;
+  VisionPipelineProfile get selectedPipeline => _fixedModel.pipeline;
+  VisionAlgorithmType get selectedAlgorithm => _fixedAlgorithm;
   VisionPermissionState get permissionState => _permissionState;
   GravitySnapshot get gravitySnapshot => _gravitySnapshot;
 
@@ -99,13 +79,15 @@ class VisionDetectionController extends ChangeNotifier {
   int get inferenceFps => _inferenceFps;
   int get processingLatencyMs => _processingLatencyMs;
   bool get fallAlarmOn => _fallAlarmOn;
-  List<ModelRuntimeState> get modelStates => _manifests.map((item) => _modelStates[item.type]!).toList(growable: false);
+  ModelRuntimeState get modelState => _modelState;
   bool get isModelLoading => _isModelLoading;
-  String? get modelLoadError => _modelLoadError;
   VisionDetectionMode get detectionMode => _detectionMode;
 
   bool get isModelReady => true;
-  String get yoloModelPath => _selectedModel.yoloModelId;
+  String get yoloModelPath => _fixedModel.yoloModelId;
+
+  /// 鑾峰彇褰撳墠绠楁硶鍙傛暟
+  AlgorithmParams get algorithmParams => _detectionMode.presetFor(_fixedAlgorithm);
 
   Future<void> initialize() async {
     if (_isInitializing) return;
@@ -114,13 +96,14 @@ class VisionDetectionController extends ChangeNotifier {
 
     try {
       await refreshPermission();
-      await _refreshModelStates();
       _latestEvent = VisionEvent(
-        title: 'YOLO SDK 已就绪',
-        detail: '视觉模块已切换为 Ultralytics 官方 Flutter SDK。',
+        title: 'YOLO 检测已就绪',
+        detail: '使用 YOLO11n Detect 模型进行目标检测。',
         timestamp: DateTime.now(),
         level: VisionEventLevel.success,
       );
+    } catch (e) {
+      AppLogger.error('Initialization error: $e');
     } finally {
       _isInitializing = false;
       notifyListeners();
@@ -128,200 +111,123 @@ class VisionDetectionController extends ChangeNotifier {
   }
 
   Future<void> refreshPermission() async {
-    final statuses = await _permissionService.checkPermissions(PermissionService.visionDetectionRequiredPermissions);
-    final camStatus = statuses[AppPermission.camera];
-    if (camStatus == AppPermissionStatus.granted) {
-      _permissionState = VisionPermissionState.granted;
-    } else if (camStatus == AppPermissionStatus.permanentlyDenied) {
-      _permissionState = VisionPermissionState.permanentlyDenied;
-    } else {
-      _permissionState = VisionPermissionState.denied;
-    }
+    final status = await _permissionService.checkPermission(AppPermission.camera);
+    _permissionState = status == AppPermissionStatus.granted 
+        ? VisionPermissionState.granted 
+        : VisionPermissionState.denied;
     notifyListeners();
   }
 
-  Future<void> requestPermissions() async {
-    await _permissionService.requestVisionDetectionPermissions();
-    await refreshPermission();
-  }
-
-  Future<void> openSystemSettings() async {
-    await _permissionService.openSettings();
-  }
-
-  Future<void> _refreshModelStates() async {
-    for (final manifest in _manifests) {
-      _modelStates[manifest.type] = _modelStates[manifest.type]!.copyWith(isDownloaded: true, isDownloading: false, progress: 1);
-    }
+  Future<void> requestPermission() async {
+    final status = await _permissionService.requestPermission(AppPermission.camera);
+    _permissionState = status == AppPermissionStatus.granted 
+        ? VisionPermissionState.granted 
+        : VisionPermissionState.denied;
     notifyListeners();
   }
 
-  Future<void> refreshModelStates() => _refreshModelStates();
+  Future<void> requestPermissions() => requestPermission();
 
-  Future<void> downloadModel(VisionModelType model) async {
+  Future<void> openSystemSettings() => _permissionService.openExternalAppSettings();
+
+  void setDetectionMode(VisionDetectionMode mode) {
+    if (_detectionMode == mode) return;
+    _detectionMode = mode;
     _latestEvent = VisionEvent(
-      title: '无需下载模型',
-      detail: '${model.label} 使用 YOLO SDK 内置模型标识，直接可运行。',
+      title: '识别模式已切换',
+      detail: '当前模式：${mode.label} - ${mode.description}',
       timestamp: DateTime.now(),
-    );
-    _modelStates[model] = _modelStates[model]!.copyWith(isDownloaded: true, isDownloading: false, progress: 1);
-    notifyListeners();
-  }
-
-  Future<void> removeModel(VisionModelType model) async {
-    _latestEvent = VisionEvent(
-      title: '模型由 SDK 管理',
-      detail: '官方 SDK 模型路径由应用资源配置控制，不支持在运行时删除。',
-      timestamp: DateTime.now(),
-      level: VisionEventLevel.warning,
+      level: VisionEventLevel.success,
     );
     notifyListeners();
   }
 
   Future<void> toggleStreaming() async {
-    _isStreaming = !_isStreaming;
-    if (!_isStreaming) {
-      _detections = const [];
-      _fallAlarmOn = false;
-      _processingLatencyMs = 0;
-      _inferenceFps = 0;
-      _fps = 0;
-      _recentFrames.clear();
-      _latestEvent = VisionEvent(
-        title: '识别流已暂停',
-        detail: 'YOLO 实时推理已停止。',
-        timestamp: DateTime.now(),
-      );
-    } else {
-      _latestEvent = VisionEvent(
-        title: '识别流已启动',
-        detail: 'YOLO 实时推理运行中。',
-        timestamp: DateTime.now(),
-        level: VisionEventLevel.success,
-      );
+    if (_permissionState != VisionPermissionState.granted) {
+      await requestPermission();
+      if (_permissionState != VisionPermissionState.granted) return;
     }
+
+    _isStreaming = !_isStreaming;
+    _detections = [];
+    _inferenceFps = 0;
+    _processingLatencyMs = 0;
+    
+    _latestEvent = VisionEvent(
+      title: _isStreaming ? '识别流已启动' : '识别流已停止',
+      detail: _isStreaming ? '正在接收相机数据并进行推理...' : '已停止所有推理任务。',
+      timestamp: DateTime.now(),
+      level: _isStreaming ? VisionEventLevel.success : VisionEventLevel.info,
+    );
+    
     notifyListeners();
   }
 
+  /// 处理来自 YOLO SDK 的检测结果
   void onYoloResult(List<dynamic> results) {
     if (!_isStreaming) return;
 
     final now = DateTime.now();
+    
+    // 计算 FPS
     if (_lastInferenceAt != null) {
-      final elapsed = now.difference(_lastInferenceAt!).inMilliseconds;
-      if (elapsed > 0) {
-        _processingLatencyMs = elapsed;
-        _inferenceFps = (1000 / elapsed).round();
+      final diff = now.difference(_lastInferenceAt!).inMilliseconds;
+      if (diff > 0) {
+        _inferenceFps = (1000 / diff).round();
+        _processingLatencyMs = diff;
       }
     }
     _lastInferenceAt = now;
 
-    _recentFrames.add(now);
-    _recentFrames.removeWhere((time) => now.difference(time).inSeconds >= 1);
-    _fps = _recentFrames.length;
+    // 解析结果数据
+    // Ultralytics SDK 返回的对象包含: x1, y1, x2, y2, confidence, label
+    // 这里的坐标已经是归一化后的 (0.0 - 1.0)
+    _detections = results.map((raw) {
+      try {
+        final Map<String, dynamic> data = (raw as Map).cast<String, dynamic>();
+        
+        final double x1 = _toDouble(data['x1'] ?? data['left'] ?? 0.0) ?? 0.0;
+        final double y1 = _toDouble(data['y1'] ?? data['top'] ?? 0.0) ?? 0.0;
+        final double x2 = _toDouble(data['x2'] ?? data['right'] ?? 0.0) ?? 0.0;
+        final double y2 = _toDouble(data['y2'] ?? data['bottom'] ?? 0.0) ?? 0.0;
 
-    _detections = results.map(_mapDetection).whereType<DetectionBox>().toList(growable: false);
-    _fallAlarmOn = _detections.any((item) => item.normalizedRect.width / item.normalizedRect.height > 1.15);
+        return DetectionBox(
+          normalizedRect: Rect.fromLTRB(
+            x1.clamp(0.0, 1.0), y1.clamp(0.0, 1.0), 
+            x2.clamp(0.0, 1.0), y2.clamp(0.0, 1.0)
+          ),
+          label: (data['label'] ?? data['tag'] ?? 'person').toString(),
+          confidence: (data['confidence'] ?? data['score'] ?? data['conf'] ?? 0.0).toDouble(),
+        );
+      } catch (e) {
+        AppLogger.error('YOLO Parse Error: $e');
+        return null;
+      }
+    }).whereType<DetectionBox>().toList();
+    
+    // 跌倒检测算法：基于框的长宽比
+    final aspectRatioThreshold = algorithmParams.aspectRatioThreshold;
+    final hasAbnormalPose = _detections.any((item) {
+      final rect = item.normalizedRect;
+      return rect.width / rect.height > aspectRatioThreshold; // 框变宽/变扁
+    });
+
+    if (hasAbnormalPose && !_fallAlarmOn) {
+      AppLogger.warning('检测到疑似跌倒姿态！');
+      _publishEvent();
+    }
+    
+    _fallAlarmOn = hasAbnormalPose;
 
     _latestEvent = VisionEvent(
-      title: _fallAlarmOn ? '检测到疑似跌倒姿态' : 'YOLO 推理中',
-      detail: '当前识别到 ${_detections.length} 个目标。',
+      title: _fallAlarmOn ? '⚠️ 检测到异常姿态' : 'YOLO 运行中 (${_inferenceFps} FPS)',
+      detail: '视野内有 ${_detections.length} 个目标。',
       timestamp: now,
       level: _fallAlarmOn ? VisionEventLevel.warning : VisionEventLevel.info,
     );
 
-    if (_fallAlarmOn) {
-      _publishEvent();
-    }
-
     notifyListeners();
   }
-
-  DetectionBox? _mapDetection(dynamic raw) {
-    try {
-      final dynamic box = _readField(raw, ['box', 'boundingBox', 'rect']);
-      final left = _toDouble(_readField(box ?? raw, ['left', 'x1', 'x', 'minX']));
-      final top = _toDouble(_readField(box ?? raw, ['top', 'y1', 'y', 'minY']));
-      final right = _toDouble(_readField(box ?? raw, ['right', 'x2', 'maxX']));
-      final bottom = _toDouble(_readField(box ?? raw, ['bottom', 'y2', 'maxY']));
-
-      if ([left, top, right, bottom].contains(null)) return null;
-
-      final rect = Rect.fromLTRB(left!, top!, right!, bottom!);
-      return DetectionBox(
-        normalizedRect: Rect.fromLTRB(
-          rect.left.clamp(0, 1),
-          rect.top.clamp(0, 1),
-          rect.right.clamp(0, 1),
-          rect.bottom.clamp(0, 1),
-        ),
-        label: (_readField(raw, ['className', 'label', 'name']) ?? 'person').toString(),
-        confidence: _toDouble(_readField(raw, ['confidence', 'score'])) ?? 0,
-      );
-    } catch (error, stackTrace) {
-      AppLogger.warning('YOLO result parse failed: $error');
-      AppLogger.debug(stackTrace.toString());
-      return null;
-    }
-  }
-
-  dynamic _readField(dynamic source, List<String> names) {
-    if (source == null) return null;
-    if (source is Map) {
-      for (final name in names) {
-        if (source.containsKey(name)) return source[name];
-      }
-    }
-    if (source is List || source is String || source is num || source is bool) {
-      return null;
-    }
-    for (final name in names) {
-      try {
-        switch (name) {
-          case 'left':
-            return (source as dynamic).left;
-          case 'x1':
-          case 'x':
-          case 'minX':
-            return (source as dynamic).x1 ?? (source as dynamic).x ?? (source as dynamic).minX;
-          case 'top':
-            return (source as dynamic).top;
-          case 'y1':
-          case 'y':
-          case 'minY':
-            return (source as dynamic).y1 ?? (source as dynamic).y ?? (source as dynamic).minY;
-          case 'right':
-            return (source as dynamic).right;
-          case 'x2':
-          case 'maxX':
-            return (source as dynamic).x2 ?? (source as dynamic).maxX;
-          case 'bottom':
-            return (source as dynamic).bottom;
-          case 'y2':
-          case 'maxY':
-            return (source as dynamic).y2 ?? (source as dynamic).maxY;
-          case 'className':
-            return (source as dynamic).className;
-          case 'label':
-            return (source as dynamic).label;
-          case 'name':
-            return (source as dynamic).name;
-          case 'confidence':
-            return (source as dynamic).confidence;
-          case 'score':
-            return (source as dynamic).score;
-          case 'box':
-            return (source as dynamic).box;
-          case 'boundingBox':
-            return (source as dynamic).boundingBox;
-          case 'rect':
-            return (source as dynamic).rect;
-        }
-      } catch (_) {}
-    }
-    return null;
-  }
-
   double? _toDouble(dynamic value) {
     if (value is num) return value.toDouble();
     if (value is String) return double.tryParse(value);
@@ -340,41 +246,9 @@ class VisionDetectionController extends ChangeNotifier {
       MqttConnectionConfig(
         broker: _mqttBroker,
         port: _mqttPort,
-        clientId: 'remep_vision_${DateTime.now().millisecondsSinceEpoch}',
+        clientId: 'remep_vision_',
       ),
     );
-    notifyListeners();
-  }
-
-  Future<void> selectModel(VisionModelType model) async {
-    if (_selectedModel == model) return;
-    _selectedModel = model;
-    _selectedAlgorithm = model.boundAlgorithm;
-    _latestEvent = VisionEvent(
-      title: '模型已切换',
-      detail: '已切换到 ${model.label}（官方 YOLO SDK）。',
-      timestamp: DateTime.now(),
-      level: VisionEventLevel.success,
-    );
-    notifyListeners();
-  }
-
-  Future<void> preloadSelectedModel() async {
-    _isModelLoading = true;
-    notifyListeners();
-    await Future<void>.delayed(const Duration(milliseconds: 150));
-    _isModelLoading = false;
-    _modelLoadError = null;
-    notifyListeners();
-  }
-
-  Future<void> switchAlgorithmByModel(VisionModelType model) async {
-    await selectModel(model);
-  }
-
-  void setDetectionMode(VisionDetectionMode mode) {
-    if (_detectionMode == mode) return;
-    _detectionMode = mode;
     notifyListeners();
   }
 
@@ -385,7 +259,7 @@ class VisionDetectionController extends ChangeNotifier {
       'type': 'vision_fall_alert',
       'ts': DateTime.now().toIso8601String(),
       'confidence': _detections.isNotEmpty ? _detections.first.confidence : 0,
-      'model': _selectedModel.label,
+      'model': _fixedModel.label,
       'source': 'ultralytics_yolo_flutter_sdk',
     });
 

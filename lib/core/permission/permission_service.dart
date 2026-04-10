@@ -21,8 +21,6 @@ enum AppPermission {
   location,
   bluetooth,
   notification,
-  sensors, // 惯性传感器 (IMU)
-  activityRecognition, // 活动识别 (步态检测)
 }
 
 /// 权限服务
@@ -237,28 +235,20 @@ class PermissionService {
     return status == AppPermissionStatus.granted;
   }
 
-  /// 检查权限在当前平台是否可用
   Future<bool> _isPermissionAvailable(AppPermission permission) async {
-    if (!Platform.isAndroid) {
-      // iOS 上 sensors 和 activityRecognition 通常不需要单独请求
-      return false;
-    }
-    
     final sdkInt = await _androidSdkInt() ?? 0;
-    
-    switch (permission) {
-      case AppPermission.activityRecognition:
-        // ACTIVITY_RECOGNITION 只在 Android 10+ (API 29+) 可用
-        return sdkInt >= 29;
-      case AppPermission.sensors:
-        // IMU（加速度计/陀螺仪）不需要运行时弹窗权限
-        return false;
-      case AppPermission.notification:
-        // 通知权限只在 Android 13+ (API 33+) 需要动态请求
-        return sdkInt >= 33;
-      default:
-        return true;
+
+    if (Platform.isAndroid) {
+      switch (permission) {
+        case AppPermission.notification:
+          // 通知权限只在 Android 13+ (API 33+) 需要动态请求
+          return sdkInt >= 33;
+        default:
+          return true;
+      }
     }
+
+    return true;
   }
 
   /// 检查权限是否被永久拒绝
@@ -303,13 +293,6 @@ class PermissionService {
     return statuses.values.every((status) => status == AppPermissionStatus.granted);
   }
 
-  /// IMU监测所需的权限组
-  /// 注意：根据 Android 版本不同，实际请求的权限有所差异
-  static const List<AppPermission> imuMonitoringRequiredPermissions = [
-    AppPermission.sensors,
-    AppPermission.activityRecognition,
-  ];
-
   /// 通知权限 - Android 13+ (API 33+)
   static const List<AppPermission> notificationPermissions = [
     AppPermission.notification,
@@ -317,47 +300,17 @@ class PermissionService {
 
   /// 请求IMU监测所需权限
   Future<Map<AppPermission, AppPermissionStatus>> requestIMUPermissions() async {
-    final result = <AppPermission, AppPermissionStatus>{};
-    for (final permission in imuMonitoringRequiredPermissions) {
-      // 跳过在当前平台不可用的权限
-      if (!await _isPermissionAvailable(permission)) {
-        result[permission] = AppPermissionStatus.granted;
-        continue;
-      }
-      result[permission] = await requestPermission(permission);
-    }
-    return result;
+    return {}; // 基础传感器无需请求权限
   }
 
   /// 检查IMU监测权限是否全部授予
   Future<bool> checkIMUPermissions() async {
-    for (final permission in imuMonitoringRequiredPermissions) {
-      // 跳过在当前平台不可用的权限
-      if (!await _isPermissionAvailable(permission)) {
-        continue;
-      }
-      final status = await checkPermission(permission);
-      if (status != AppPermissionStatus.granted) {
-        return false;
-      }
-    }
-    return true;
+    return true; // 基础传感器视为始终授权
   }
 
   /// 获取未授权的IMU权限列表
   Future<List<AppPermission>> getDeniedIMUPermissions() async {
-    final denied = <AppPermission>[];
-    for (final permission in imuMonitoringRequiredPermissions) {
-      // 跳过在当前平台不可用的权限
-      if (!await _isPermissionAvailable(permission)) {
-        continue;
-      }
-      final status = await checkPermission(permission);
-      if (status != AppPermissionStatus.granted) {
-        denied.add(permission);
-      }
-    }
-    return denied;
+    return []; // 无需授权
   }
 
   Permission _mapPermission(AppPermission permission) {
@@ -376,11 +329,6 @@ class PermissionService {
         return Permission.bluetoothScan;
       case AppPermission.notification:
         return Permission.notification;
-      case AppPermission.sensors:
-        return Permission.sensors;
-      case AppPermission.activityRecognition:
-        // Android 10+ (API 29+) 需要 ACTIVITY_RECOGNITION 权限
-        return Permission.activityRecognition;
     }
   }
 
@@ -400,5 +348,10 @@ class PermissionService {
         return AppPermissionStatus.provisional;
     }
     // switch is exhaustive for known PermissionStatus values; no-op fallback
+  }
+
+  /// 打开系统设置页面
+  Future<bool> openExternalAppSettings() async {
+    return openAppSettings();
   }
 }

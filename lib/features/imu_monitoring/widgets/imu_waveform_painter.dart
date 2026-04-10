@@ -242,62 +242,48 @@ class OrientationSpherePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    final radius = math.min(size.width, size.height) / 2 - 20;
+    final radius = math.min(size.width, size.height) / 2 - 10;
 
-    // 绘制球体外壳
-    final spherePaint = Paint()
-      ..shader = RadialGradient(
-        center: const Alignment(-0.3, -0.3),
-        radius: 1.0,
-        colors: [
-          primaryColor.withValues(alpha: 0.8),
-          primaryColor.withValues(alpha: 0.3),
-          primaryColor.withValues(alpha: 0.1),
-        ],
-      ).createShader(Rect.fromCircle(center: center, radius: radius))
-      ..style = PaintingStyle.fill;
-
-    canvas.drawCircle(center, radius, spherePaint);
-
-    // 绘制球体边框
+    // 简约化：只绘制半透明外圈
     final borderPaint = Paint()
-      ..color = primaryColor.withValues(alpha: 0.5)
-      ..strokeWidth = 2
+      ..color = primaryColor.withValues(alpha: 0.15)
+      ..strokeWidth = 1.0
       ..style = PaintingStyle.stroke;
     canvas.drawCircle(center, radius, borderPaint);
 
-    // 绘制赤道线
-    final equatorPaint = Paint()
-      ..color = secondaryColor.withValues(alpha: 0.3)
-      ..strokeWidth = 1
-      ..style = PaintingStyle.stroke;
-    
-    canvas.drawOval(
-      Rect.fromCenter(center: center, width: radius * 2, height: radius * 0.4),
-      equatorPaint,
-    );
-
-    // 绘制经线
-    canvas.drawOval(
-      Rect.fromCenter(center: center, width: radius * 0.4, height: radius * 2),
-      equatorPaint,
-    );
+    // 绘制装饰性中心圆
+    canvas.drawCircle(center, 4, Paint()..color = primaryColor.withValues(alpha: 0.2));
 
     if (data != null) {
-      // 计算重力向量方向
+      // 这里的逻辑保持，但视觉效果调轻
       final pitch = data!.pitch;
       final roll = data!.roll;
 
-      // 绘制重力向量
-      final gravityLength = radius * 0.7;
-      final gravityX = center.dx + math.sin(roll) * gravityLength * 0.4;
-      final gravityY = center.dy + math.sin(pitch) * gravityLength * 0.4 + 
-                       math.cos(roll) * gravityLength * 0.3;
+      // 限制点在圆周内
+      final limit = radius * 0.85;
+      final gravityX = center.dx + math.sin(roll) * limit;
+      final gravityY = center.dy + math.sin(pitch) * limit;
 
-      // 绘制重力点
+      // 绘制追踪阴影
+      final shadowPaint = Paint()
+        ..color = primaryColor.withValues(alpha: 0.1)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+      canvas.drawCircle(Offset(gravityX, gravityY), 12, shadowPaint);
+
+      // 绘制现代感十足的核心点
       final pointPaint = Paint()
-        ..color = Colors.red
+        ..color = primaryColor
         ..style = PaintingStyle.fill;
+      canvas.drawCircle(Offset(gravityX, gravityY), 5, pointPaint);
+      
+      // 增加一个外环
+      final ringPaint = Paint()
+        ..color = primaryColor.withValues(alpha: 0.4)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5;
+      canvas.drawCircle(Offset(gravityX, gravityY), 10, ringPaint);
+    }
+  }
       
       canvas.drawCircle(Offset(gravityX, gravityY), 8, pointPaint);
 
@@ -389,12 +375,16 @@ class MotionIndicatorPainter extends CustomPainter {
     switch (motionType) {
       case MotionType.stationary:
         return Colors.grey;
+      case MotionType.moving:
+        return Colors.teal;
       case MotionType.walking:
         return Colors.green;
       case MotionType.running:
         return Colors.blue;
       case MotionType.shake:
         return Colors.orange;
+      case MotionType.vigorousShake:
+        return Colors.deepOrange;
       case MotionType.freeFall:
         return Colors.purple;
       case MotionType.possibleFall:
@@ -410,12 +400,16 @@ class MotionIndicatorPainter extends CustomPainter {
     switch (motionType) {
       case MotionType.stationary:
         return '静止';
+      case MotionType.moving:
+        return '轻微移动';
       case MotionType.walking:
         return '行走';
       case MotionType.running:
         return '跑步';
       case MotionType.shake:
         return '摇晃';
+      case MotionType.vigorousShake:
+        return '剧烈摇晃';
       case MotionType.freeFall:
         return '自由落体';
       case MotionType.possibleFall:

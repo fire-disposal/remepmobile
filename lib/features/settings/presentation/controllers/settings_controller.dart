@@ -4,8 +4,6 @@ import '../../../../core/permission/permission_service.dart';
 import '../../../../core/storage/cache_service.dart';
 import '../../../../core/storage/secure_storage_service.dart';
 import '../../../../core/theme/theme_notifier.dart';
-import '../../../vision_detection/vision_detection_controller.dart';
-import '../../../vision_detection/vision_detection_models.dart';
 
 /// 设置状态
 class SettingsState {
@@ -33,12 +31,14 @@ class SettingsState {
 }
 
 /// 设置控制器
+/// 
+/// 管理应用设置，包括主题、权限等
+/// 移除了模型管理相关功能（模型切换功能已删除）
 class SettingsController extends ChangeNotifier {
   final ThemeModeNotifier _themeModeNotifier;
   final CacheStorageService _cacheStorage;
   final SecureStorageService _secureStorage;
   final PermissionService _permissionService;
-  final VisionDetectionController _visionController;
 
   SettingsState _state = const SettingsState();
   SettingsState get state => _state;
@@ -48,14 +48,8 @@ class SettingsController extends ChangeNotifier {
     this._cacheStorage,
     this._secureStorage,
     this._permissionService,
-    this._visionController,
   ) {
-    _visionController.addListener(_onVisionStateChanged);
     _init();
-  }
-
-  void _onVisionStateChanged() {
-    notifyListeners();
   }
 
   Future<void> _init() async {
@@ -65,7 +59,6 @@ class SettingsController extends ChangeNotifier {
     );
     notifyListeners();
     await refreshPermissions();
-    await _visionController.refreshModelStates();
   }
 
   /// 刷新所有权限状态
@@ -127,17 +120,4 @@ class SettingsController extends ChangeNotifier {
     notifyListeners();
   }
 
-  VisionDetectionController get visionController => _visionController;
-
-  Future<void> refreshModelManagement() => _visionController.refreshModelStates();
-
-  Future<void> downloadModel(VisionModelType type) => _visionController.downloadModel(type);
-
-  Future<void> removeModel(VisionModelType type) => _visionController.removeModel(type);
-
-  @override
-  void dispose() {
-    _visionController.removeListener(_onVisionStateChanged);
-    super.dispose();
-  }
 }

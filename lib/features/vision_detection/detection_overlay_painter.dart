@@ -9,10 +9,15 @@ import 'vision_detection_models.dart';
 /// - 关键点（圆点）
 /// - 骨架连接线
 class DetectionOverlayPainter extends CustomPainter {
-  DetectionOverlayPainter(this.boxes, {required this.outputKind});
+  DetectionOverlayPainter(
+    this.boxes, {
+    required this.outputKind,
+    this.drawEmptyIndicator = false,
+  });
 
   final List<DetectionBox> boxes;
   final VisionOutputKind outputKind;
+  final bool drawEmptyIndicator;
 
   // COCO格式的骨架连接定义（基于17个关键点）
   // 格式: [起点索引, 终点索引]
@@ -61,6 +66,34 @@ class DetectionOverlayPainter extends CustomPainter {
         _drawDetectionBox(canvas, size, box, borderPaint, fillPaint);
       }
     }
+
+    // 新增：如果没有任何框且开启了空指示器，绘制扫描线提示用户推理正在运行
+    if (boxes.isEmpty && drawEmptyIndicator) {
+      _drawScanningEffect(canvas, size);
+    }
+  }
+
+  /// 绘制扫描效果提示用户推理正在运行
+  void _drawScanningEffect(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.greenAccent.withValues(alpha: 0.3)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+    
+    // 绘制屏幕中心的十字准星
+    final center = Offset(size.width / 2, size.height / 2);
+    canvas.drawLine(center - const Offset(20, 0), center + const Offset(20, 0), paint);
+    canvas.drawLine(center - const Offset(0, 20), center + const Offset(0, 20), paint);
+    
+    // 绘制四个角的对角基线，增加“侦测中”的氛围感
+    final cornerLen = 30.0;
+    // 左上
+    canvas.drawLine(Offset.zero, Offset(cornerLen, 0), paint);
+    canvas.drawLine(Offset.zero, Offset(0, cornerLen), paint);
+    // 右上
+    canvas.drawLine(Offset(size.width, 0), Offset(size.width - cornerLen, 0), paint);
+    canvas.drawLine(Offset(size.width, 0), Offset(size.width, cornerLen), paint);
+    // 下略... 仅示意 UI 在运行
   }
 
   /// 仅绘制标签（用于关键点模型）
@@ -109,13 +142,27 @@ class DetectionOverlayPainter extends CustomPainter {
   /// 绘制检测框
   void _drawDetectionBox(Canvas canvas, Size size, DetectionBox box, 
                          Paint borderPaint, Paint fillPaint) {
-    final rect = Rect.fromLTWH(
-      box.normalizedRect.left * size.width,
+    // 镜像处理：如果相机是前置（常见的移动端视觉识别场景），可能需要水平翻转 x 轴
+    // 如果发现识别框和人左右相反，则开启此逻辑
+    const bool flipHorizontal = false; 
+
+    double left = box.normalizedRect.left;
+    double right = box.normalizedRect.right;
+    
+    if (flipHorizontal) {
+      final double oldLeft = left;
+      left = 1.0 - right;
+      right = 1.0 - oldLeft;
+    }
+
+    final rect = Rect.fromLTRB(
+      left * size.width,
       box.normalizedRect.top * size.height,
-      box.normalizedRect.width * size.width,
-      box.normalizedRect.height * size.height,
+      right * size.width,
+      box.normalizedRect.bottom * size.height,
     );
 
+    // 绘制美化：使用圆角矩阵和发光边框感
     canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(8)), fillPaint);
     canvas.drawRRect(RRect.fromRectAndRadius(rect, const Radius.circular(8)), borderPaint);
 

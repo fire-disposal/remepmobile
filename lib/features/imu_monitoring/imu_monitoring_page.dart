@@ -35,7 +35,10 @@ class _ImuMonitoringPageState extends State<ImuMonitoringPage>
     // 直接请求所需权限
     await permissionService.requestIMUPermissions();
     
-    _controller = IMUController();
+    _controller = IMUController(
+      sensorService: getIt<IMUSensorService>(),
+      mqttService: getIt<MqttService>(),
+    );
     await _controller.initialize();
     
     if (mounted) {

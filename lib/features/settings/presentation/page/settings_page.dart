@@ -3,10 +3,9 @@ import 'package:flutter/material.dart';
 import '../../../../core/di/service_locator.dart';
 import '../../../../core/theme/theme.dart';
 import '../../../../core/permission/permission_service.dart';
-import '../../../vision_detection/vision_detection_models.dart';
 import '../controllers/settings_controller.dart';
 
-/// 设置页面 - 包含权限管理调试功能
+/// 设置页面 - 包含权限管理等功能
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
 
@@ -47,20 +46,9 @@ class SettingsPage extends StatelessWidget {
               ),
 
               _buildSectionHeader(context, '权限管理'),
-              ...AppPermission.values.map((p) => _buildPermissionTile(context, controller, p, state.permissions[p])),
+              ...AppPermission.values.map((p) => _buildPermissionTile(
+                  context, controller, p, state.permissions[p])),
 
-              _buildSectionHeader(context, '模型文件管理'),
-              ListTile(
-                leading: const Icon(Icons.model_training_outlined),
-                title: const Text('刷新模型状态'),
-                subtitle: const Text('下载/解压后的模型会写入本地，视觉页只允许切换已就绪模型。'),
-                trailing: const Icon(Icons.refresh),
-                onTap: () => controller.refreshModelManagement(),
-              ),
-              ...controller.visionController.modelStates.map(
-                (item) => _buildModelTile(context, controller, item),
-              ),
-              
               const Divider(),
               ListTile(
                 leading: const Icon(Icons.settings_applications_outlined),
@@ -146,50 +134,6 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
-  Widget _buildModelTile(
-    BuildContext context,
-    SettingsController controller,
-    ModelRuntimeState state,
-  ) {
-    final model = state.manifest.type;
-    final isBuiltIn = state.manifest.builtIn;
-    return ListTile(
-      dense: true,
-      leading: Icon(
-        Icons.memory_rounded,
-        color: model.accent,
-      ),
-      title: Text(model.label),
-      subtitle: Text(
-        '${model.description}\n${state.isDownloaded || isBuiltIn ? "已就绪" : "未下载"} · ${state.manifest.sizeLabel}',
-      ),
-      isThreeLine: true,
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (state.isDownloading)
-            SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(value: state.progress, strokeWidth: 2),
-            ),
-          if (!isBuiltIn) ...[
-            IconButton(
-              tooltip: state.isDownloaded ? '重新下载' : '下载',
-              onPressed: state.isDownloading ? null : () => controller.downloadModel(model),
-              icon: const Icon(Icons.download_rounded),
-            ),
-            IconButton(
-              tooltip: '删除',
-              onPressed: state.isDownloading || !state.isDownloaded ? null : () => controller.removeModel(model),
-              icon: const Icon(Icons.delete_outline_rounded),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
   /// 构建权限操作按钮
   Widget _buildPermissionActionButton(
     BuildContext context,
@@ -242,8 +186,6 @@ class SettingsPage extends StatelessWidget {
       case AppPermission.location: return '位置信息';
       case AppPermission.bluetooth: return '蓝牙连接';
       case AppPermission.notification: return '系统通知';
-      case AppPermission.sensors: return '运动传感器';
-      case AppPermission.activityRecognition: return '活动识别';
     }
   }
 
@@ -255,8 +197,6 @@ class SettingsPage extends StatelessWidget {
       case AppPermission.location: return Icons.location_on_outlined;
       case AppPermission.bluetooth: return Icons.bluetooth_outlined;
       case AppPermission.notification: return Icons.notifications_none_outlined;
-      case AppPermission.sensors: return Icons.sensors_outlined;
-      case AppPermission.activityRecognition: return Icons.directions_run_outlined;
     }
   }
 
@@ -286,10 +226,6 @@ class SettingsPage extends StatelessWidget {
         return '用于扫描与连接 BLE 设备（Android 12+ 需单独授权）。';
       case AppPermission.notification:
         return '用于系统通知与告警推送（Android 13+）。';
-      case AppPermission.sensors:
-        return 'IMU（加速度计/陀螺仪）无需单独弹窗授权。';
-      case AppPermission.activityRecognition:
-        return '用于步态/活动检测（Android 10+）。';
     }
   }
 

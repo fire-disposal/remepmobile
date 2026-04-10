@@ -400,12 +400,16 @@ class MotionStatusCard extends StatelessWidget {
     switch (motionType) {
       case MotionType.stationary:
         return Colors.grey;
+      case MotionType.moving:
+        return Colors.teal;
       case MotionType.walking:
         return Colors.green;
       case MotionType.running:
         return Colors.blue;
       case MotionType.shake:
         return Colors.orange;
+      case MotionType.vigorousShake:
+        return Colors.deepOrange;
       case MotionType.freeFall:
         return Colors.purple;
       case MotionType.possibleFall:
@@ -421,12 +425,16 @@ class MotionStatusCard extends StatelessWidget {
     switch (motionType) {
       case MotionType.stationary:
         return '静止';
+      case MotionType.moving:
+        return '轻微移动';
       case MotionType.walking:
         return '行走中';
       case MotionType.running:
         return '跑步中';
       case MotionType.shake:
         return '检测到摇晃';
+      case MotionType.vigorousShake:
+        return '剧烈摇晃中';
       case MotionType.freeFall:
         return '自由落体！';
       case MotionType.possibleFall:
@@ -442,12 +450,16 @@ class MotionStatusCard extends StatelessWidget {
     switch (motionType) {
       case MotionType.stationary:
         return Icons.pause_circle;
+      case MotionType.moving:
+        return Icons.open_with;
       case MotionType.walking:
         return Icons.directions_walk;
       case MotionType.running:
         return Icons.directions_run;
       case MotionType.shake:
         return Icons.vibration;
+      case MotionType.vigorousShake:
+        return Icons.vibration_sharp;
       case MotionType.freeFall:
         return Icons.arrow_downward;
       case MotionType.possibleFall:
@@ -461,7 +473,9 @@ class MotionStatusCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isAlert = motionType == MotionType.fall || motionType == MotionType.freeFall;
+    final isAlert = motionType == MotionType.fall || 
+        motionType == MotionType.freeFall || 
+        motionType == MotionType.vigorousShake;
     
     return Container(
       padding: const EdgeInsets.all(12),

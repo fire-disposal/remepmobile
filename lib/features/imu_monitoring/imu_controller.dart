@@ -1,9 +1,13 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:mqtt_client/mqtt_client.dart';
 
+import '../../core/mqtt/mqtt_models.dart';
+import '../../core/mqtt/mqtt_service.dart';
 import '../../core/utils/logger.dart';
 import 'imu_sensor_service.dart';
 
@@ -122,7 +126,12 @@ class IMUControllerState {
 /// IMU控制器
 class IMUController extends ChangeNotifier {
   final IMUSensorService _sensorService;
+  final MqttService _mqttService;
   static const String _tag = 'IMUController';
+
+  // MQTT 相关配置同步视觉识别模块
+  String _mqttBroker = 'broker.hivemq.com';
+  int _mqttPort = 1883;
 
   // 状态
   IMUControllerState _state = const IMUControllerState();
@@ -144,8 +153,14 @@ class IMUController extends ChangeNotifier {
   // 定时器
   Timer? _statsTimer;
 
-  IMUController({IMUSensorService? sensorService})
-      : _sensorService = sensorService ?? IMUSensorService();
+  IMUController({
+    IMUSensorService? sensorService,
+    MqttService? mqttService,
+  })  : _sensorService = sensorService ?? IMUSensorService(),
+        _mqttService = mqttService ?? MqttService();
+
+  String get mqttBroker => _mqttBroker;
+  int get mqttPort => _mqttPort;
 
   /// 初始化并启动
   Future<void> initialize() async {
@@ -208,7 +223,54 @@ class IMUController extends ChangeNotifier {
     );
     notifyListeners();
 
+    // 重点事件发布到 MQTT
+    if (event.type == MotionType.fall || 
+        event.type == MotionType.possibleFall || 
+        event.type == MotionType.freeFall ||
+        event.type == MotionType.vigorousShake ||
+        event.type == MotionType.moving) {
+      _publishMqttEvent(event);
+    }
+
     AppLogger.info('[$_tag] Motion detected: ${event.type} (confidence: ${event.confidence.toStringAsFixed(2)})');
+  }
+
+  /// 同步视觉模块的 MQTT 配置方法
+  Future<void> updateMqttConfig({required String broker, required int port}) async {
+    _mqttBroker = broker;
+    _mqttPort = port;
+
+    if (_mqttService.currentStatus == MqttConnectionStatus.connected) {
+      await _mqttService.disconnect();
+    }
+
+    await _mqttService.connect(
+      MqttConnectionConfig(
+        broker: _mqttBroker,
+        port: _mqttPort,
+        clientId: 'remep_imu_${DateTime.now().millisecondsSinceEpoch}',
+      ),
+    );
+    notifyListeners();
+  }
+
+  void _publishMqttEvent(MotionEvent event) {
+    if (_mqttService.currentStatus != MqttConnectionStatus.connected) return;
+
+    final payload = jsonEncode({
+      'type': 'imu_motion_event',
+      'motion': event.type.toString().split('.').last,
+      'confidence': event.confidence,
+      'ts': event.timestamp.toIso8601String(),
+      'source': 'imu_monitoring_service',
+      'data': event.data,
+    });
+
+    _mqttService.publish(
+      topic: 'remep/imu/events',
+      message: payload,
+      qos: MqttQos.atLeastOnce,
+    );
   }
 
   /// 方向变化处理

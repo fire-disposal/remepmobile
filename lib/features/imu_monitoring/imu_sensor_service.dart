@@ -108,9 +108,11 @@ enum IMUDeviceOrientation {
 /// 动作类型
 enum MotionType {
   stationary,      // 静止
+  moving,          // 移动 (低强度)
   walking,         // 行走
   running,         // 跑步
   shake,           // 摇晃
+  vigorousShake,   // 剧烈摇晃
   freeFall,        // 自由落体
   possibleFall,    // 可能跌倒
   fall,            // 跌倒
@@ -303,40 +305,55 @@ class IMUSensorService {
     double confidence = 0.0;
 
     // 1. 自由落体检测 - 加速度接近0
-    if (mean < 2.0 && stdDev < 1.0) {
+    if (mean < 2.5 && stdDev < 1.2) {
       currentMotion = MotionType.freeFall;
-      confidence = 0.9;
+      confidence = 0.95;
     }
     // 2. 跌倒检测 - 剧烈加速度变化后静止
-    else if (maxAccel > 25.0 && stdDev > 8.0) {
-      // 检查是否在冲击后有静止期
-      final recentMean = _accelHistory.skip(_historySize ~/ 2).reduce((a, b) => a + b) 
-          / (_historySize ~/ 2);
+    // 优化：增加更严格的冲击阈值和静止窗口判断
+    else if (maxAccel > 28.0 && stdDev > 9.0) {
+      // 检查是否在冲击后由动态转为极度静止（典型跌倒特征）
+      final secondHalf = _accelHistory.skip(_historySize ~/ 2).toList();
+      final recentMean = secondHalf.reduce((a, b) => a + b) / secondHalf.length;
+      final recentStd = math.sqrt(secondHalf.map((v) => (v - recentMean) * (v - recentMean)).reduce((a, b) => a + b) / secondHalf.length);
       
-      if (recentMean < 12.0) {
+      if (recentMean < 11.0 && recentStd < 2.0) {
+        currentMotion = MotionType.fall; // 升级为确认跌倒
+        confidence = 0.85;
+      } else {
         currentMotion = MotionType.possibleFall;
-        confidence = 0.7;
+        confidence = 0.6;
       }
     }
-    // 3. 跑步检测 - 高方差且周期性
-    else if (stdDev > 5.0 && mean > 15.0) {
+    // 3. 跑步运行检测 - 高方差且周期性
+    else if (stdDev > 5.5 && mean > 14.0) {
       currentMotion = MotionType.running;
-      confidence = 0.8;
+      confidence = 0.85;
     }
     // 4. 行走检测 - 中等方差
-    else if (stdDev > 2.0 && stdDev <= 5.0 && mean > 10.0) {
+    else if (stdDev > 1.8 && stdDev <= 5.5 && mean > 9.5) {
       currentMotion = MotionType.walking;
       confidence = 0.8;
     }
-    // 5. 摇晃检测 - 高频变化
+    // 5. 移动检测 (Moving) - 低于行走的轻微位移
+    else if (stdDev > 0.8 && stdDev <= 1.8) {
+      currentMotion = MotionType.moving;
+      confidence = 0.7;
+    }
+    // 6. 剧烈摇晃 (Vigorous Shake)
+    else if (stdDev > 18.0) {
+      currentMotion = MotionType.vigorousShake;
+      confidence = 0.95;
+    }
+    // 7. 普通摇晃检测
     else if (stdDev > 10.0) {
       currentMotion = MotionType.shake;
       confidence = 0.9;
     }
-    // 6. 静止检测 - 低方差
-    else if (stdDev < 1.5 && mean < 12.0) {
+    // 8. 静止检测
+    else if (stdDev < 0.8 && mean > 9.0 && mean < 11.0) {
       currentMotion = MotionType.stationary;
-      confidence = 0.9;
+      confidence = 0.95;
     }
 
     // 防抖：只有当运动类型持续一段时间才报告
