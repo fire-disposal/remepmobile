@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/di/service_locator.dart';
 import '../../core/mqtt/mqtt_config_service.dart';
+import 'mqtt_history_page.dart';
 
 class MqttSettingsPage extends StatefulWidget {
   const MqttSettingsPage({super.key});
@@ -165,6 +166,16 @@ class _MqttSettingsPageState extends State<MqttSettingsPage> {
               },
               icon: const Icon(Icons.save_outlined),
               label: const Text('保存并重连'),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const MqttHistoryPage()),
+                );
+              },
+              icon: const Icon(Icons.history_rounded),
+              label: const Text('查看发送历史'),
             ),
           ],
         ),

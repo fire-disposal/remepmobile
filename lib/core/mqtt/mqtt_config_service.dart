@@ -45,6 +45,7 @@ class MqttConfigService extends ChangeNotifier {
   static const _brokerKey = 'mqtt_broker';
   static const _portKey = 'mqtt_port';
   static const _baseTopicKey = 'mqtt_base_topic';
+  static const _historyKey = 'mqtt_publish_history';
 
   MqttRuntimeConfig _config;
   MqttRuntimeConfig get config => _config;
@@ -114,6 +115,57 @@ class MqttConfigService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 读取已保存的发送历史（最新在前）
+  List<Map<String, dynamic>> getPublishHistory({int limit = 500}) {
+    final raw = _cache.read<List<dynamic>>(_historyKey) ?? <dynamic>[];
+    final list = raw.cast<Map>().map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    // 最新在前
+    list.sort((a, b) => (b['ts'] as String).compareTo(a['ts'] as String));
+    if (limit > 0 && list.length > limit) {
+      return list.sublist(0, limit);
+    }
+    return list;
+  }
+
+  /// 清空发送历史
+  Future<void> clearPublishHistory() async {
+    await _cache.write(_historyKey, <Map<String, dynamic>>[]);
+    notifyListeners();
+  }
+
+  void _recordPublishHistory({
+    required String topic,
+    required String payload,
+    required int qos,
+    required bool retain,
+  }) {
+    try {
+      final entry = <String, dynamic>{
+        'topic': topic,
+        'payload': payload,
+        'qos': qos,
+        'retain': retain,
+        'ts': DateTime.now().toIso8601String(),
+      };
+      final raw = _cache.read<List<dynamic>>(_historyKey) ?? <dynamic>[];
+      final list = List<Map<String, dynamic>>.from(raw.map((e) => Map<String, dynamic>.from(e as Map)));
+      list.add(entry);
+      // 限制最大条数，避免无限增长
+      const maxEntries = 1000;
+      if (list.length > maxEntries) {
+        // 保留最新的 maxEntries
+        final start = list.length - maxEntries;
+        final trimmed = list.sublist(start);
+        _cache.write(_historyKey, trimmed);
+      } else {
+        _cache.write(_historyKey, list);
+      }
+      notifyListeners();
+    } catch (_) {
+      // 忽略写入错误，避免影响主流程
+    }
+  }
+
   Future<void> reconnect() async {
     if (_mqttService.currentStatus == MqttConnectionStatus.connected) {
       await _mqttService.disconnect();
@@ -142,6 +194,13 @@ class MqttConfigService extends ChangeNotifier {
       message: payload,
       qos: qos,
     );
+    // 记录发送历史
+    _recordPublishHistory(
+      topic: buildTopic(topicSuffix),
+      payload: payload,
+      qos: qos.index,
+      retain: false,
+    );
   }
 
   bool publishTest({
@@ -160,6 +219,12 @@ class MqttConfigService extends ChangeNotifier {
       topic: buildTopic(topicSuffix),
       message: message,
       qos: qos,
+    );
+    _recordPublishHistory(
+      topic: buildTopic(topicSuffix),
+      payload: message,
+      qos: qos.index,
+      retain: false,
     );
     return true;
   }
