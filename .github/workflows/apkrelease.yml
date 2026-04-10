@@ -1,0 +1,130 @@
+name: flutter用户端Apk Release
+
+on:
+  push:
+    tags:
+      - "v*"
+      - "[0-9]+.[0-9]+.[0-9]+*"
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: "Manual Version Name (e.g., v1.0.0)"
+        required: false
+        default: "manual-build"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      # ========= 0️⃣ Checkout =========
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 必须设置为 0 才能获取完整的 git log
+
+      # ========= 1️⃣ 确保模型文件被打包到 assets/models =========
+      - name: Ensure models present in assets
+        run: |
+          mkdir -p assets/models
+          # copy tflite from root models/ into assets/models if not already present
+          cp -n models/*.tflite assets/models/ || true
+          ls -la assets/models
+
+      # ========= 5️⃣ 环境配置 & 缓存 =========
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: "17"
+          cache: gradle # 自动缓存 Gradle 依赖
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true # 自动缓存 Flutter SDK
+
+      - name: Cache Pub dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: ${{ runner.os }}-pub-${{ hashFiles('pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pub-
+
+      # ========= 6️⃣ Flutter 构建 =========
+      - name: Build APK
+        # 在仓库根目录构建（本仓库为 Flutter 项目根）
+        working-directory: .
+        env:
+          # 增加 JVM 内存以应对大模型打包，防止 11 分钟后的 OOM
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=512m"
+        run: |
+          flutter pub get
+          # 使用 --no-pub 确保不再进行冗余检查，加速构建
+          flutter build apk --split-per-abi --no-pub
+
+      # ========= 7️⃣ APK 重命名 & 产物准备 =========
+      - name: Prepare Artifacts
+        id: prepare
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version_name }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/}"
+          fi
+
+          APK_DIR="build/app/outputs/flutter-apk"
+
+          # 重命名并保存路径到 OUTPUT（使用项目名 remep_mobile 前缀）
+          mv "$APK_DIR/app-armeabi-v7a-release.apk" "$APK_DIR/remep_mobile_${VERSION}_armeabi-v7a.apk"
+          mv "$APK_DIR/app-arm64-v8a-release.apk" "$APK_DIR/remep_mobile_${VERSION}_arm64-v8a.apk"
+          mv "$APK_DIR/app-x86_64-release.apk" "$APK_DIR/remep_mobile_${VERSION}_x86_64.apk"
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "arm32_apk=$APK_DIR/remep_mobile_${VERSION}_armeabi-v7a.apk" >> "$GITHUB_OUTPUT"
+          echo "arm64_apk=$APK_DIR/remep_mobile_${VERSION}_arm64-v8a.apk" >> "$GITHUB_OUTPUT"
+          echo "x64_apk=$APK_DIR/remep_mobile_${VERSION}_x86_64.apk" >> "$GITHUB_OUTPUT"
+
+      # ========= 8️⃣ 动态生成 Release Body =========
+      - name: Generate release body
+        shell: bash
+        run: |
+          VERSION="${{ steps.prepare.outputs.version }}"
+          RECENT_COMMITS=$(git log -5 --pretty=format:"- %s (%h)")
+
+          cat <<EOF > release.md
+          ## 🚀 Release ${VERSION}
+
+          📦 **构建说明：**
+          - 本 Release 由 GitHub Actions 自动构建
+          - 对应代码状态：Tag \`${VERSION}\`
+          - 模型资源：固定引用自 \`v1.0.0\` 版本（ASR / TTS ONNX）
+
+          <details>
+          <summary>📝 最近提交记录</summary>
+
+          ${RECENT_COMMITS}
+
+          </details>
+          EOF
+
+      # ========= 9️⃣ 发布 Release =========
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.prepare.outputs.version }}
+          name: Release ${{ steps.prepare.outputs.version }}
+          body_path: release.md
+          files: |
+            ${{ steps.prepare.outputs.arm32_apk }}
+            ${{ steps.prepare.outputs.arm64_apk }}
+            ${{ steps.prepare.outputs.x64_apk }}
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -66,6 +66,37 @@ class MqttConfigService extends ChangeNotifier {
 
   String buildTopic(String suffix) => '${_config.baseTopic}/$suffix';
 
+  String buildPreviewUri({String? broker, int? port}) {
+    final host = (broker ?? _config.broker).trim();
+    final resolvedPort = port ?? _config.port;
+    if (host.isEmpty) return '';
+    if (host.contains('://')) {
+      final uri = Uri.tryParse(host);
+      if (uri != null && uri.hasPort) {
+        return host;
+      }
+      return '$host:$resolvedPort';
+    }
+    return 'mqtt://$host:$resolvedPort';
+  }
+
+  String? validateConfig({
+    required String broker,
+    required int port,
+    required String baseTopic,
+  }) {
+    if (broker.trim().isEmpty) {
+      return 'Broker 地址不能为空';
+    }
+    if (port <= 0 || port > 65535) {
+      return '端口范围应为 1-65535';
+    }
+    if (baseTopic.trim().isEmpty) {
+      return 'Topic 前缀不能为空';
+    }
+    return null;
+  }
+
   Future<void> updateConfig({
     required String broker,
     required int port,
@@ -111,5 +142,25 @@ class MqttConfigService extends ChangeNotifier {
       message: payload,
       qos: qos,
     );
+  }
+
+  bool publishTest({
+    String topicSuffix = 'diagnostics/test',
+    String? payload,
+    MqttQos qos = MqttQos.atLeastOnce,
+  }) {
+    if (_mqttService.currentStatus != MqttConnectionStatus.connected) {
+      return false;
+    }
+
+    final message = payload ??
+        '{"type":"mqtt_test","ts":"${DateTime.now().toIso8601String()}","topic":"${buildTopic(topicSuffix)}"}';
+
+    _mqttService.publish(
+      topic: buildTopic(topicSuffix),
+      message: message,
+      qos: qos,
+    );
+    return true;
   }
 }
